@@ -109,6 +109,9 @@ enum SelfTest {
             check("gpu-honest", sample2.gpuPercent == nil, sample2.gpuNote)
         }
         check("version-gt-32", UpdateChecker.isVersion("3.3.0", newerThan: "3.2.0"), "3.3>3.2")
+        check("version-gt-331", UpdateChecker.isVersion("3.3.1", newerThan: "3.3.0"), "3.3.1>3.3.0")
+        check("permissions-helper", !PermissionsHelper.humanChecklist.isEmpty, "checklist")
+        check("ax-api", true, PermissionsHelper.accessibilityTrusted ? "granted" : "not-granted-ok")
 
         print(failed ? "self-test failed" : "self-test ok")
         return failed ? 1 : 0

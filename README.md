@@ -15,6 +15,22 @@ This project **continues and improves** the local predecessor Game Bay (`~/Proje
 - Game Bay is **not deleted**. Keep using it for Coach / library features if you like.
 - Mac Gaming Helper keeps the launcher hub (Steam, Heroic, GeForce NOW) and replaces the thin controller page with a DualShock 4–first desk: multi-pad selection, live diagram, stylized pad art, light bar, haptics test, pairing coach, and optional keyboard/mouse mapping.
 
+## Install to Applications & permissions
+
+```bash
+./scripts/install.sh          # prefers /Applications, falls back to ~/Applications
+./scripts/open-permissions.sh # opens Privacy panes (you must flip toggles ON)
+```
+
+**Enable for Mac Gaming Helper:**
+1. **Privacy & Security → Bluetooth** — pad discovery  
+2. **Privacy & Security → Accessibility** — only if using Mapping  
+3. **Notifications** — low-battery alerts  
+4. **Local Network** — optional (Ping metric)  
+5. **Automation** — if macOS prompts for Steam / System Settings  
+
+**Show the Performance Bar:** Settings → Overlay & performance, or menu bar → Show Performance Bar, or **⌃⌥⌘P**. Or tap **Apply recommended gaming setup** in Settings → Permissions.
+
 ## Gaming Overlay (3.3)
 
 - Always-on-top **Performance Bar** or Compact HUD while gaming

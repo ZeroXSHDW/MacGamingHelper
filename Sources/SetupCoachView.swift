@@ -206,8 +206,10 @@ struct SetupPage: View {
                     PillButton(title: monitor.discovering ? "Scanning…" : "Rediscover", primary: true) {
                         monitor.rediscover()
                     }
-                    PillButton(title: "Bluetooth Settings") { launchers.openBluetooth() }
-                    PillButton(title: "Open Accessibility") { mapper.openAccessibilitySettings() }
+                    PillButton(title: "Bluetooth Settings") { PermissionsHelper.openBluetoothSettings() }
+                    PillButton(title: "Bluetooth privacy") { PermissionsHelper.openBluetoothPrivacy() }
+                    PillButton(title: "Open Accessibility") { PermissionsHelper.openAccessibility() }
+                    PillButton(title: "Notifications") { PermissionsHelper.openNotifications() }
                     if launchers.items.first(where: { $0.id == "steam" })?.isInstalled == true {
                         PillButton(title: "Steam Big Picture") { launchers.openSteamBigPicture() }
                     }

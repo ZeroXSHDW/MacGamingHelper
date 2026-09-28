@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.1 — 2026-09-28
+
+- Install to **/Applications** (fallback `~/Applications`) with quarantine strip + entitlements codesign
+- Settings → **Permissions** one-tap deep links (Bluetooth, Accessibility, Notifications, Local Network, Automation)
+- “Apply recommended gaming setup” enables Performance Bar (top), menu bar, keep-awake session, core metrics
+- New-install default: Gaming Overlay ON in Performance Bar mode
+- `scripts/open-permissions.sh` walks privacy panes for first-time setup
+- Info.plist: Local Network + Bluetooth peripheral + notifications usage strings
+
 ## 3.3.0 — 2026-09-28
 
 - **Gaming Performance Bar** — unified always-on-top Overlay (Compact HUD | Full Performance Bar)

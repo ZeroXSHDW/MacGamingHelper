@@ -67,9 +67,9 @@ cat > "$stage/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>3.3.0</string>
+  <string>3.3.1</string>
   <key>CFBundleVersion</key>
-  <string>9</string>
+  <string>10</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>
@@ -79,9 +79,15 @@ cat > "$stage/Contents/Info.plist" <<'PLIST'
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSBluetoothAlwaysUsageDescription</key>
-  <string>Mac Gaming Helper looks for a DualShock 4 or DualSense paired or advertising over Bluetooth.</string>
+  <string>Mac Gaming Helper looks for a DualShock 4 or DualSense paired or advertising over Bluetooth so the Performance Bar and Controller desk can show live pad status.</string>
+  <key>NSBluetoothPeripheralUsageDescription</key>
+  <string>Mac Gaming Helper uses Bluetooth to find and reconnect DualShock 4 / DualSense controllers.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Mac Gaming Helper measures optional network latency (Ping) for the Gaming Performance Bar. Disable Ping in Settings if you prefer not to allow this.</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>Mac Gaming Helper may open Steam Big Picture and System Settings for controller setup.</string>
+  <string>Mac Gaming Helper may open Steam Big Picture and System Settings for controller setup and permissions.</string>
+  <key>NSUserNotificationsUsageDescription</key>
+  <string>Mac Gaming Helper can notify you when controller battery is low during a gaming session.</string>
 </dict>
 </plist>
 PLIST

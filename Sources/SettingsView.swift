@@ -14,7 +14,7 @@ struct SettingsPage: View {
                 Text("Settings")
                     .font(.largeTitle.weight(.bold))
                     .tracking(-0.4)
-                Text("Menu bar, login item, deadzones, light bar preference, and updates.")
+                Text("Menu bar, overlay, permissions, deadzones, light bar, and updates.")
                     .foregroundStyle(Theme.mute)
 
                 Card {
@@ -47,6 +47,57 @@ struct SettingsPage: View {
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
                         PillButton(title: "Refresh login-item status") { settings.refreshLoginItemState() }
+                    }
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Permissions")
+                            .font(.headline)
+                        Text("macOS will not let apps grant these silently. Tap each button, then enable Mac Gaming Helper.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                        HStack(spacing: 8) {
+                            PillButton(title: "Bluetooth privacy") { PermissionsHelper.openBluetoothPrivacy() }
+                            PillButton(title: "Bluetooth devices") { PermissionsHelper.openBluetoothSettings() }
+                        }
+                        HStack(spacing: 8) {
+                            PillButton(title: "Accessibility") { PermissionsHelper.openAccessibility() }
+                            PillButton(title: "Notifications") {
+                                PermissionsHelper.requestNotificationAuth()
+                                PermissionsHelper.openNotifications()
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            PillButton(title: "Local Network") { PermissionsHelper.openLocalNetwork() }
+                            PillButton(title: "Automation") { PermissionsHelper.openAutomation() }
+                        }
+                        Text(PermissionsHelper.accessibilityTrusted
+                             ? "Accessibility: granted"
+                             : "Accessibility: not granted (Mapping stays off until allowed)")
+                            .font(.caption)
+                            .foregroundStyle(PermissionsHelper.accessibilityTrusted ? Theme.good : Theme.warn)
+                        PillButton(title: "Apply recommended gaming setup", primary: true) {
+                            settings.showMenuBar = true
+                            settings.showOverlay = true
+                            settings.overlayMode = .performance
+                            settings.overlayEdge = .top
+                            settings.gamingSessionActive = true
+                            settings.metricController = true
+                            settings.metricCPU = true
+                            settings.metricMemory = true
+                            settings.metricGPU = true
+                            settings.metricPanel = true
+                            settings.metricPing = true
+                            settings.metricMapping = true
+                            settings.metricAwake = true
+                            settings.pingEnabled = true
+                            MenuBarController.shared.applyVisibility()
+                            GamingOverlayController.shared.applyVisibility()
+                        }
+                        Text("Recommended: Performance Bar on (top), menu bar on, keep-awake session on. Hotkey ⌃⌥⌘P.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
                     }
                 }
 

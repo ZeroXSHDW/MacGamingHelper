@@ -213,11 +213,13 @@ final class AppSettings: ObservableObject {
         pauseMappingWhenInactive = d.object(forKey: Key.pauseMappingInactive) as? Bool ?? true
         focusModeController = d.bool(forKey: Key.focusMode)
         preferredPadKey = d.string(forKey: Key.preferredPadKey) ?? ""
-        // Overlay: migrate legacy showPlayHUD
+        // Overlay: migrate legacy showPlayHUD; new installs default Overlay ON (Performance Bar)
         if d.object(forKey: Key.showOverlay) != nil {
             showOverlay = d.bool(forKey: Key.showOverlay)
-        } else {
+        } else if d.object(forKey: Key.showPlayHUD) != nil {
             showOverlay = d.bool(forKey: Key.showPlayHUD)
+        } else {
+            showOverlay = true
         }
         if let raw = d.string(forKey: Key.overlayMode), let m = OverlayMode(rawValue: raw) {
             overlayMode = m
