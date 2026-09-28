@@ -1,5 +1,21 @@
 # Mac Gaming Helper
 
+## Standalone — no assistant required
+
+This repo and the app on this Mac are complete. You do **not** need any chat bot to run, rebuild, or update Mac Gaming Helper.
+
+| What you need | Where |
+|---|---|
+| Run the app | `/Applications/Mac Gaming Helper.app` or Desktop **Start Mac Gaming Helper.command** |
+| Source | `~/Projects/MacGamingHelper` and https://github.com/ZeroXSHDW/MacGamingHelper |
+| Latest download | https://github.com/ZeroXSHDW/MacGamingHelper/releases/latest |
+| Rebuild | `./scripts/install.sh` |
+| Permissions panes | `./scripts/open-permissions.sh` |
+| Gatekeeper unblock | `./scripts/fix-gatekeeper.sh` |
+
+---
+
+
 ## Easiest run
 
 1. Open **`/Applications/Mac Gaming Helper.app`** (or Desktop → **Start Mac Gaming Helper.command**)
