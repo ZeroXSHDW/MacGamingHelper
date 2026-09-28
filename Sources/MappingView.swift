@@ -53,6 +53,23 @@ struct MappingPage: View {
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
                         Toggle("Touchpad → mouse (click + move)", isOn: $settings.touchpadAsMouse)
+                        Toggle("Hair-trigger L2/R2 (low click threshold)", isOn: $settings.hairTrigger)
+                        if settings.hairTrigger {
+                            HStack {
+                                Text("Threshold")
+                                Slider(value: $settings.hairTriggerThreshold, in: 0.05...0.35)
+                                Text(String(format: "%.2f", settings.hairTriggerThreshold))
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(Theme.mute)
+                            }
+                        }
+                        if monitor.selected.motionAvailable {
+                            Toggle("Gyro assist mouse (motion exposed)", isOn: $settings.gyroAssistMouse)
+                        } else {
+                            Text("Gyro assist unavailable — motion not exposed for this pad.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.mute)
+                        }
 
                         HStack {
                             Circle()
@@ -90,9 +107,37 @@ struct MappingPage: View {
                 }
 
                 Card {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Aim stick → mouse")
+                            .font(.headline)
+                        Picker("Response curve", selection: $settings.stickCurve) {
+                            ForEach(StickCurve.allCases) { c in
+                                Text(c.title).tag(c)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityLabel("Stick response curve")
+                        HStack {
+                            Text("Aim sensitivity")
+                            Slider(value: $settings.aimSensitivity, in: 0.4...2.5)
+                            Text(String(format: "%.2f", settings.aimSensitivity))
+                                .font(.caption.monospaced())
+                                .frame(width: 36)
+                        }
+                        Toggle("Invert look Y", isOn: $settings.invertLookY)
+                        Text("Curves reshape right-stick mouse look after deadzone. Expo = fine aim near center.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                    }
+                }
+
+                Card {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Profiles")
                             .font(.headline)
+                        Text("⌘⌥1 / ⌘⌥2 / ⌘⌥3 switch the first three profiles.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
                         ForEach(mapper.profiles) { preset in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {

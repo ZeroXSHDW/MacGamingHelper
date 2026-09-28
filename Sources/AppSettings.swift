@@ -26,6 +26,13 @@ final class AppSettings: ObservableObject {
         static let pauseMappingInactive = "settings.pauseMappingInactive"
         static let focusMode = "settings.focusMode"
         static let preferredPadKey = "settings.preferredPadKey"
+        static let showPlayHUD = "settings.showPlayHUD"
+        static let stickCurve = "settings.stickCurve"
+        static let aimSensitivity = "settings.aimSensitivity"
+        static let invertLookY = "settings.invertLookY"
+        static let hairTrigger = "settings.hairTrigger"
+        static let hairTriggerThreshold = "settings.hairTriggerThreshold"
+        static let gyroAssist = "settings.gyroAssist"
     }
 
     @Published var showMenuBar: Bool {
@@ -73,6 +80,30 @@ final class AppSettings: ObservableObject {
     @Published var preferredPadKey: String {
         didSet { d.set(preferredPadKey, forKey: Key.preferredPadKey) }
     }
+    @Published var showPlayHUD: Bool {
+        didSet {
+            d.set(showPlayHUD, forKey: Key.showPlayHUD)
+            PlayHUDController.shared.applyVisibility()
+        }
+    }
+    @Published var stickCurve: StickCurve {
+        didSet { d.set(stickCurve.rawValue, forKey: Key.stickCurve) }
+    }
+    @Published var aimSensitivity: Double {
+        didSet { d.set(aimSensitivity, forKey: Key.aimSensitivity) }
+    }
+    @Published var invertLookY: Bool {
+        didSet { d.set(invertLookY, forKey: Key.invertLookY) }
+    }
+    @Published var hairTrigger: Bool {
+        didSet { d.set(hairTrigger, forKey: Key.hairTrigger) }
+    }
+    @Published var hairTriggerThreshold: Double {
+        didSet { d.set(hairTriggerThreshold, forKey: Key.hairTriggerThreshold) }
+    }
+    @Published var gyroAssistMouse: Bool {
+        didSet { d.set(gyroAssistMouse, forKey: Key.gyroAssist) }
+    }
     @Published var launchAtLoginEnabled: Bool = false
     @Published var launchAtLoginNote: String = ""
 
@@ -88,10 +119,21 @@ final class AppSettings: ObservableObject {
         lowBatteryAlerts = d.object(forKey: Key.lowBatteryAlerts) as? Bool ?? true
         didShowWelcome = d.bool(forKey: Key.didWelcome)
         activeProfileID = d.string(forKey: Key.activeProfileID) ?? MappingProfile.fpsWASD.id
-        lastTab = d.string(forKey: Key.lastTab) ?? NavPage.controller.rawValue
+        lastTab = d.string(forKey: Key.lastTab) ?? NavPage.play.rawValue
         pauseMappingWhenInactive = d.object(forKey: Key.pauseMappingInactive) as? Bool ?? true
         focusModeController = d.bool(forKey: Key.focusMode)
         preferredPadKey = d.string(forKey: Key.preferredPadKey) ?? ""
+        showPlayHUD = d.bool(forKey: Key.showPlayHUD)
+        if let raw = d.string(forKey: Key.stickCurve), let c = StickCurve(rawValue: raw) {
+            stickCurve = c
+        } else {
+            stickCurve = .easeOut
+        }
+        aimSensitivity = d.object(forKey: Key.aimSensitivity) as? Double ?? 1.15
+        invertLookY = d.bool(forKey: Key.invertLookY)
+        hairTrigger = d.object(forKey: Key.hairTrigger) as? Bool ?? true
+        hairTriggerThreshold = d.object(forKey: Key.hairTriggerThreshold) as? Double ?? 0.12
+        gyroAssistMouse = d.bool(forKey: Key.gyroAssist)
         refreshLoginItemState()
     }
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.1.0 — 2026-09-28
+
+Gaming-first DualShock 4 session tools.
+
+- **Play** page: Session Prep checklist, Prep Steam session (Mapping off + Big Picture), Steam library quick-launch (`steam://rungameid`)
+- **Play HUD**: optional always-on-top floating panel (battery, LIVE/PAUSED, ⌥⌘M)
+- Stick **response curves** (Linear / Ease-out / Expo), aim sensitivity, invert Y
+- Hair-trigger L2/R2 thresholds; optional gyro assist when motion is exposed
+- Running-game awareness banner when Steam/Heroic/GFN frontmost
+- Profile hotkeys ⌘⌥1–3; menu bar Prep Steam / HUD / battery tint
+
 ## 3.0.0 — 2026-09-28
 
 Major quality leap for a shipping DualShock 4 Mac utility.

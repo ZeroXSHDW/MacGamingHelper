@@ -25,6 +25,7 @@ struct SettingsPage: View {
                             .onChange(of: settings.showMenuBar) { _, _ in
                                 MenuBarController.shared.applyVisibility()
                             }
+                        Toggle("Play HUD (always-on-top while gaming)", isOn: $settings.showPlayHUD)
                         Toggle("Start minimized to menu bar", isOn: $settings.startMinimizedToMenuBar)
                         Toggle("Open Pairing coach when no pad is connected", isOn: $settings.openPairingOnEmpty)
                         Toggle("Low-battery alerts (≤20%)", isOn: $settings.lowBatteryAlerts)
@@ -135,7 +136,7 @@ struct SettingsPage: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Keyboard shortcuts")
                             .font(.headline)
-                        Text("⌘1–⌘6 tabs · ⌘R Rediscover · ⌥⌘M Pause/Resume Mapping")
+                        Text("⌘1–⌘7 tabs · ⌘R Rediscover · ⌥⌘M Pause Mapping · ⌘⌥1–3 profiles")
                             .font(.callout)
                             .foregroundStyle(Theme.mute)
                     }

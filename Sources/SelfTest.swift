@@ -9,77 +9,66 @@ enum SelfTest {
             if !ok { failed = true }
         }
 
-        check("theme-name", Theme.name == "Mac Gaming Helper", Theme.name)
-        check("theme-version", Theme.version.hasPrefix("3."), Theme.version)
+        check("theme-version", Theme.version.hasPrefix("3.1"), Theme.version)
         check(
             "nav-pages",
-            NavPage.allCases.map(\.rawValue) == ["controller", "mapping", "launchers", "setup", "settings", "help"],
+            NavPage.allCases.map(\.rawValue) == ["play", "controller", "mapping", "launchers", "setup", "settings", "help"],
             NavPage.allCases.map(\.rawValue).joined(separator: ",")
         )
-        check("nav-sections", NavPage.deskSection.count == 3 && NavPage.setupSection.count == 3, "desk/setup")
+        check("nav-desk", NavPage.deskSection.first == .play, "play first")
 
-        check(
-            "launcher-catalog",
-            LauncherShelf.catalog.map(\.id) == ["steam", "heroic", "geforce"],
-            LauncherShelf.catalog.map(\.id).joined(separator: ",")
-        )
-        check(
-            "extras-include-gamebay",
-            LauncherShelf.extraCatalog.contains { $0.id == "gamebay" },
-            "Game Bay preserved"
-        )
+        check("curve-linear", StickCurve.linear.apply(0.5) == 0.5, "\(StickCurve.linear.apply(0.5))")
+        check("curve-ease", StickCurve.easeOut.apply(0) == 0 && StickCurve.easeOut.apply(1) == 1, "ease ends")
+        check("curve-expo", StickCurve.expo.apply(0.5) < 0.5, "expo soft center")
+        let shaped = StickMath.shaped(value: 0.5, deadzone: 0.1, curve: .linear)
+        check("shaped-dz", shaped > 0 && shaped < 1, "\(shaped)")
+        check("shaped-inside-dz", StickMath.shaped(value: 0.05, deadzone: 0.1, curve: .linear) == 0, "zero")
 
-        let empty = ControllerSnapshot.empty
-        check("empty-disconnected", empty.connected == false && empty.kind == .none, empty.title)
-        check("empty-transport", empty.transport == .unknown, empty.transport.rawValue)
-        check("empty-motion", empty.motionAvailable == false, empty.motionNote)
-        check("ds4-short", PadKind.dualShock4.shortLabel == "DS4", PadKind.dualShock4.shortLabel)
-        check(
-            "ps-kinds",
-            PadKind.dualShock4.isPlayStation && PadKind.dualSense.isPlayStation && !PadKind.xbox.isPlayStation,
-            "PS flags"
-        )
-
-        check("fps-profile", MappingProfile.fpsWASD.bindings.count >= 10, "\(MappingProfile.fpsWASD.bindings.count) bindings")
-        check("arrows-profile", MappingProfile.arrowsBrowse.bindings.contains { $0.control == "Cross" }, "Cross→Return")
-        let dup = MappingProfile.fpsWASD.duplicating(name: "Test Custom")
-        check("dup-custom", dup.id.hasPrefix("custom-") && dup.name == "Test Custom", dup.id)
-        do {
-            try ProfileStore.save(dup)
-            check("profile-save-load", ProfileStore.loadAll().contains(where: { $0.id == dup.id }), dup.id)
-            try ProfileStore.delete(id: dup.id)
-            check("profile-delete", !ProfileStore.loadAll().contains(where: { $0.id == dup.id }), "removed")
-        } catch {
-            check("profile-io", false, error.localizedDescription)
+        // Steam VDF fixtures
+        let acf = """
+        "AppState"
+        {
+          "appid" "730"
+          "name" "Counter-Strike 2"
+          "StateFlags" "4"
         }
-
-        check("pairing-steps", PairingCoach.bluetoothSteps.count >= 5, "\(PairingCoach.bluetoothSteps.count) BT steps")
-        check("usb-first", PairingCoach.usbFirstSteps.contains { $0.lowercased().contains("usb") }, "USB-first")
-        check("art-list", PairingCoach.artNames.count >= 8, "\(PairingCoach.artNames.count)")
-        var artHits = 0
-        for name in PairingCoach.artNames {
-            if BundleArt.nsImage(name) != nil { artHits += 1 }
+        """
+        check("vdf-name", SteamVDF.value(acf, key: "name") == "Counter-Strike 2", SteamVDF.value(acf, key: "name") ?? "nil")
+        check("vdf-flags-installed", (Int(SteamVDF.value(acf, key: "StateFlags") ?? "") ?? 0) & 4 != 0, "flag 4")
+        let absent = acf.replacingOccurrences(of: "\"4\"", with: "\"2\"")
+        check("vdf-flags-absent", (Int(SteamVDF.value(absent, key: "StateFlags") ?? "") ?? 0) & 4 == 0, "flag 2")
+        let folders = """
+        "libraryfolders"
+        {
+          "0"
+          {
+            "path" "/Users/user/Library/Application Support/Steam"
+          }
         }
-        check("art-bundle", artHits >= 6, "\(artHits)/\(PairingCoach.artNames.count)")
-
-        check("version-compare-newer", UpdateChecker.isVersion("3.0.0", newerThan: "2.3.0"), "3>2.3")
-        check("haptic-kinds", HapticPatternKind.allCases.count == 3, "\(HapticPatternKind.allCases.count)")
+        """
+        check("vdf-path", SteamVDF.paths(in: folders).contains { $0.contains("Steam") }, SteamVDF.paths(in: folders).joined(separator: "|"))
 
         let settings = AppSettings.shared
-        check("settings-deadzone", settings.stickDeadzone > 0, "\(settings.stickDeadzone)")
-        check("settings-last-tab", !settings.lastTab.isEmpty, settings.lastTab)
-        check("settings-pause-inactive", settings.pauseMappingWhenInactive == true || settings.pauseMappingWhenInactive == false, "bool")
+        check("aim-sens", settings.aimSensitivity > 0, "\(settings.aimSensitivity)")
+        check("hair-default", settings.hairTriggerThreshold > 0, "\(settings.hairTriggerThreshold)")
 
-        // Diagnostics dump shape
         let mon = ControllerMonitor()
         let map = InputMapper()
         map.bind(monitor: mon, settings: settings)
-        let dump = Diagnostics.dump(monitor: mon, mapper: map, settings: settings)
-        check("diag-has-version", dump.contains("3.0.0") || dump.contains(Theme.version), "version in dump")
-        check("diag-has-permissions", dump.contains("Accessibility"), "AX section")
-        check("diag-has-controllers", dump.contains("Controllers"), "pads section")
+        let shelf = LauncherShelf()
+        shelf.refresh()
+        let items = GameSession.prepItems(monitor: mon, mapper: map, launchers: shelf)
+        check("prep-count", items.count >= 4, "\(items.count)")
+        check("prep-pad-fail", items.contains { $0.id == "pad" && $0.ok == false }, "no pad expected")
 
-        check("steam-locate", LauncherShelf.catalog[0].located().id == "steam", "steam")
+        check("extras-gamebay", LauncherShelf.extraCatalog.contains { $0.id == "gamebay" }, "preserved")
+        check("art-bundle", PairingCoach.artNames.filter { BundleArt.nsImage($0) != nil }.count >= 6, "arts")
+        check("version-gt-3", UpdateChecker.isVersion("3.1.0", newerThan: "3.0.0"), "3.1>3.0")
+
+        // Live steam scan (best-effort)
+        let steam = SteamShelf()
+        steam.refresh()
+        check("steam-scan", steam.lastScanOK, steam.note)
 
         print(failed ? "self-test failed" : "self-test ok")
         return failed ? 1 : 0

@@ -15,6 +15,13 @@ This project **continues and improves** the local predecessor Game Bay (`~/Proje
 - Game Bay is **not deleted**. Keep using it for Coach / library features if you like.
 - Mac Gaming Helper keeps the launcher hub (Steam, Heroic, GeForce NOW) and replaces the thin controller page with a DualShock 4–first desk: multi-pad selection, live diagram, stylized pad art, light bar, haptics test, pairing coach, and optional keyboard/mouse mapping.
 
+## Gaming (3.1)
+
+- Open the **Play** tab for Session Prep and Steam quick-launch.
+- **Prep Steam session** turns Mapping off and opens Big Picture (Steam Input owns the DualShock 4).
+- Optional **Play HUD** stays on top while in a game (Settings or menu bar).
+- Mapping aim: response curves + aim sensitivity; hair-trigger L2/R2; ⌥⌘M pause; ⌘⌥1–3 profiles.
+
 ## Features
 
 - Apple **Game Controller** — DualShock 4 (`GCDualShockGamepad`), DualSense, and other extended pads

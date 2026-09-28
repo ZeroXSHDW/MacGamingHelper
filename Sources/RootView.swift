@@ -1,10 +1,11 @@
 import SwiftUI
 
 enum NavPage: String, CaseIterable, Identifiable, Hashable {
-    case controller, mapping, launchers, setup, settings, help
+    case play, controller, mapping, launchers, setup, settings, help
     var id: String { rawValue }
     var title: String {
         switch self {
+        case .play: "Play"
         case .controller: "Controller"
         case .mapping: "Mapping"
         case .launchers: "Launchers"
@@ -15,6 +16,7 @@ enum NavPage: String, CaseIterable, Identifiable, Hashable {
     }
     var symbol: String {
         switch self {
+        case .play: "play.circle.fill"
         case .controller: "gamecontroller.fill"
         case .mapping: "keyboard"
         case .launchers: "square.stack.3d.up.fill"
@@ -25,15 +27,16 @@ enum NavPage: String, CaseIterable, Identifiable, Hashable {
     }
     var shortcutKey: KeyEquivalent {
         switch self {
-        case .controller: "1"
-        case .mapping: "2"
-        case .launchers: "3"
-        case .setup: "4"
-        case .settings: "5"
-        case .help: "6"
+        case .play: "1"
+        case .controller: "2"
+        case .mapping: "3"
+        case .launchers: "4"
+        case .setup: "5"
+        case .settings: "6"
+        case .help: "7"
         }
     }
-    static var deskSection: [NavPage] { [.controller, .mapping, .launchers] }
+    static var deskSection: [NavPage] { [.play, .controller, .mapping, .launchers] }
     static var setupSection: [NavPage] { [.setup, .settings, .help] }
 }
 
@@ -41,7 +44,9 @@ struct RootView: View {
     @EnvironmentObject private var monitor: ControllerMonitor
     @EnvironmentObject private var mapper: InputMapper
     @EnvironmentObject private var settings: AppSettings
-    @State private var page: NavPage = .controller
+    @EnvironmentObject private var session: GameSession
+    @EnvironmentObject private var launchers: LauncherShelf
+    @State private var page: NavPage = .play
     @State private var showWelcome = false
 
     private var windowTitle: String {
@@ -123,8 +128,21 @@ struct RootView: View {
                     .accessibilityLabel(banner)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
+                if session.steamInputHint && mapper.enabled && !mapper.pausedByUser {
+                    HStack {
+                        Image(systemName: "gamecontroller.fill")
+                        Text("Steam/game frontmost — pause Mapping for Steam Input")
+                            .font(.callout.weight(.semibold))
+                        Spacer()
+                        PillButton(title: "Pause", primary: true) { mapper.togglePauseHotkey() }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Theme.accent.opacity(0.18))
+                }
                 Group {
                     switch page {
+                    case .play: PlayPage()
                     case .controller: ControllerPage()
                     case .mapping: MappingPage()
                     case .launchers: LaunchersPage()
@@ -178,6 +196,17 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .mghToggleMappingPause)) { _ in
             mapper.togglePauseHotkey()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mghProfileSlot)) { note in
+            if let idx = note.object as? Int {
+                mapper.selectProfileAtIndex(idx)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mghPrepSteam)) { _ in
+            GameSession.prepSteamSession(mapper: mapper, launchers: launchers)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mghToggleHUD)) { _ in
+            PlayHUDController.shared.toggle()
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: monitor.selected.connected)
         .animation(.easeInOut(duration: 0.25), value: monitor.lowBatteryBanner)

@@ -76,6 +76,16 @@ final class InputMapper: ObservableObject {
         }
     }
 
+    func selectProfileAtIndex(_ index: Int) {
+        reloadProfiles()
+        guard index >= 0, index < profiles.count else {
+            lastAction = "No profile at slot \(index + 1)"
+            return
+        }
+        selectPreset(profiles[index])
+        lastAction = "Profile \(index + 1): \(profiles[index].name)"
+    }
+
     func reloadProfiles() {
         profiles = ProfileStore.loadAll()
     }
@@ -218,11 +228,16 @@ final class InputMapper: ObservableObject {
                 }
             case .mouseMove:
                 if binding.control == "RightStick" || binding.control == "LeftStick" {
-                    let x = binding.control == "RightStick" ? snap.rx : snap.lx
-                    let y = binding.control == "RightStick" ? snap.ry : snap.ly
-                    if abs(x) > dz || abs(y) > dz {
-                        mouseDX += x * binding.scale * sens
-                        mouseDY += -y * binding.scale * sens
+                    let rawX = binding.control == "RightStick" ? snap.rx : snap.lx
+                    let rawY = binding.control == "RightStick" ? snap.ry : snap.ly
+                    let curve = settings?.stickCurve ?? .linear
+                    let sx = StickMath.shaped(value: rawX, deadzone: dz, curve: curve)
+                    var sy = StickMath.shaped(value: rawY, deadzone: dz, curve: curve)
+                    if settings?.invertLookY == true { sy = -sy }
+                    let aim = (settings?.aimSensitivity ?? 1.0) * sens
+                    if abs(sx) > 0.001 || abs(sy) > 0.001 {
+                        mouseDX += sx * binding.scale * aim
+                        mouseDY += -sy * binding.scale * aim
                     }
                 }
             case .scroll, .none:
@@ -248,6 +263,14 @@ final class InputMapper: ObservableObject {
                 lastTouchpadX = nil
                 lastTouchpadY = nil
             }
+        }
+
+        // Optional gyro assist → mouse (only when motion exposed; never faked)
+        if settings?.gyroAssistMouse == true, snap.motionAvailable {
+            let gx = snap.roll * 6 * (settings?.aimSensitivity ?? 1)
+            let gy = snap.pitch * 6 * (settings?.aimSensitivity ?? 1) * (settings?.invertLookY == true ? -1 : 1)
+            mouseDX += gx
+            mouseDY += gy
         }
 
         for code in wantKeys where !heldKeys.contains(code) {
@@ -286,8 +309,16 @@ final class InputMapper: ObservableObject {
         case "Triangle", "Y": return snap.buttons.contains("Triangle") || snap.buttons.contains("Y")
         case "L1": return snap.buttons.contains("L1")
         case "R1": return snap.buttons.contains("R1")
-        case "L2": return snap.lt > max(0.3, triggerDeadzone) || snap.buttons.contains("L2")
-        case "R2": return snap.rt > max(0.3, triggerDeadzone) || snap.buttons.contains("R2")
+        case "L2":
+            let thr = (settings?.hairTrigger == true)
+                ? max(0.05, settings?.hairTriggerThreshold ?? 0.12)
+                : max(0.3, triggerDeadzone)
+            return snap.lt > thr || snap.buttons.contains("L2")
+        case "R2":
+            let thr = (settings?.hairTrigger == true)
+                ? max(0.05, settings?.hairTriggerThreshold ?? 0.12)
+                : max(0.3, triggerDeadzone)
+            return snap.rt > thr || snap.buttons.contains("R2")
         case "L3": return snap.buttons.contains("L3")
         case "R3": return snap.buttons.contains("R3")
         case "Up": return snap.buttons.contains("Up")

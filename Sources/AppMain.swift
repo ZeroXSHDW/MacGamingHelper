@@ -18,6 +18,8 @@ struct MacGamingHelperApp: App {
     @StateObject private var mapper = InputMapper()
     @StateObject private var launchers = LauncherShelf()
     @StateObject private var settings = AppSettings.shared
+    @StateObject private var steam = SteamShelf()
+    @StateObject private var session = GameSession()
 
     init() {
         _ = NSApplication.shared
@@ -30,6 +32,8 @@ struct MacGamingHelperApp: App {
                 .environmentObject(mapper)
                 .environmentObject(launchers)
                 .environmentObject(settings)
+                .environmentObject(steam)
+                .environmentObject(session)
                 .frame(minWidth: settings.focusModeController ? 720 : 960,
                        minHeight: settings.focusModeController ? 560 : 640)
                 .onAppear {
@@ -37,11 +41,14 @@ struct MacGamingHelperApp: App {
                     monitor.start()
                     launchers.refresh()
                     mapper.bind(monitor: monitor, settings: settings)
-                    MenuBarController.shared.bind(monitor: monitor, settings: settings)
+                    MenuBarController.shared.bind(monitor: monitor, settings: settings, mapper: mapper, launchers: launchers)
                     MenuBarController.shared.applyVisibility()
+                    PlayHUDController.shared.bind(monitor: monitor, mapper: mapper, settings: settings)
+                    session.start()
+                    steam.refresh()
                     if settings.startMinimizedToMenuBar {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                            for w in NSApp.windows { w.orderOut(nil) }
+                            for w in NSApp.windows where !(w is NSPanel) { w.orderOut(nil) }
                         }
                     }
                 }
@@ -65,6 +72,26 @@ struct MacGamingHelperApp: App {
                     NotificationCenter.default.post(name: .mghToggleMappingPause, object: nil)
                 }
                 .keyboardShortcut("m", modifiers: [.command, .option])
+                Divider()
+                Button("Mapping Profile 1") {
+                    NotificationCenter.default.post(name: .mghProfileSlot, object: 0)
+                }
+                .keyboardShortcut("1", modifiers: [.command, .option])
+                Button("Mapping Profile 2") {
+                    NotificationCenter.default.post(name: .mghProfileSlot, object: 1)
+                }
+                .keyboardShortcut("2", modifiers: [.command, .option])
+                Button("Mapping Profile 3") {
+                    NotificationCenter.default.post(name: .mghProfileSlot, object: 2)
+                }
+                .keyboardShortcut("3", modifiers: [.command, .option])
+                Divider()
+                Button("Prep Steam Session") {
+                    NotificationCenter.default.post(name: .mghPrepSteam, object: nil)
+                }
+                Button("Toggle Play HUD") {
+                    NotificationCenter.default.post(name: .mghToggleHUD, object: nil)
+                }
             }
         }
     }
@@ -74,4 +101,7 @@ extension Notification.Name {
     static let mghGoPage = Notification.Name("mghGoPage")
     static let mghRediscover = Notification.Name("mghRediscover")
     static let mghToggleMappingPause = Notification.Name("mghToggleMappingPause")
+    static let mghProfileSlot = Notification.Name("mghProfileSlot")
+    static let mghPrepSteam = Notification.Name("mghPrepSteam")
+    static let mghToggleHUD = Notification.Name("mghToggleHUD")
 }
