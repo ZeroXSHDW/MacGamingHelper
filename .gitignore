@@ -1,0 +1,10 @@
+build/
+dist/
+.DS_Store
+*.swp
+*.xcuserstate
+xcuserdata/
+.derivedData/
+DerivedData/
+*.app
+!scripts/
