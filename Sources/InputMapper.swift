@@ -60,6 +60,17 @@ final class InputMapper: ObservableObject {
         })
     }
 
+    /// Sticky pause for Start gaming / Steam — does not toggle; no-op if Mapping off.
+    func pauseForSteamSession() {
+        guard enabled else { return }
+        if !pausedByUser {
+            pausedByUser = true
+            releaseAll()
+            isLive = false
+        }
+        lastAction = "Paused for gaming session (⌥⌘M to resume Mapping)"
+    }
+
     func togglePauseHotkey() {
         if !enabled {
             _ = enableIfTrusted()

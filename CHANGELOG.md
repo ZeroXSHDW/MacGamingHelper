@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.4.1 — 2026-09-28
+
+### Works better
+- Stable controller IDs across sleep/reconnect (no more random selection drops)
+- Rediscover debounce + auto-rescan after Mac wake
+- Start gaming Mapping pause is sticky (no accidental toggle-resume); Steam prep uses same path
+- Stop gaming clears overlay, keep-awake, and tears down zombie Performance Bar panels
+- Start gaming is idempotent; Desktop `.command` always opens `/Applications` by path
+- Perf metrics: Game CPU sampled off the main thread; ping timeouts clear stale ms; GPU never shows NaN
+- Steam library buttons disabled / clearer empty copy when Steam missing
+- Self-test covers session start/stop + sticky Mapping pause
+
 ## 3.4.0 — 2026-09-28
 
 ### Easier to run

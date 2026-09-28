@@ -115,7 +115,48 @@ enum SelfTest {
         check("version-gt-34", UpdateChecker.isVersion("3.4.0", newerThan: "3.3.1"), "3.4>3.3.1")
         check("ax-api", true, PermissionsHelper.accessibilityTrusted ? "granted" : "not-granted-ok")
 
-        print(failed ? "self-test failed" : "self-test ok")
+
+                // Session state machine (settings + keep-awake only — no NSPanel in --self-test)
+        let s = AppSettings.shared
+        let wasOverlay = s.showOverlay
+        let wasSession = s.gamingSessionActive
+        s.overlayMode = .performance
+        s.gamingSessionActive = true
+        s.showOverlay = true
+        KeepAwake.shared.update(active: true)
+        check("session-start-active", s.gamingSessionActive, "active")
+        check("session-start-overlay", s.showOverlay, "overlay")
+        check("session-start-mode", s.overlayMode == .performance, s.overlayMode.rawValue)
+        check("session-awake-on", KeepAwake.shared.isAsserting, "asserting")
+        // Idempotent flag set
+        s.gamingSessionActive = true
+        s.showOverlay = true
+        check("session-idempotent", s.gamingSessionActive && s.showOverlay, "still on")
+        s.gamingSessionActive = false
+        s.showOverlay = false
+        KeepAwake.shared.update(active: false)
+        check("session-stop-active", !s.gamingSessionActive, "cleared")
+        check("session-stop-overlay", !s.showOverlay, "overlay off")
+        check("session-stop-awake", !KeepAwake.shared.isAsserting, "awake off")
+        s.showOverlay = wasOverlay
+        s.gamingSessionActive = wasSession
+
+        let mapper = InputMapper()
+        mapper.enabled = true
+        mapper.pausedByUser = false
+        mapper.pauseForSteamSession()
+        check("map-pause-sticky", mapper.pausedByUser && mapper.enabled, "paused sticky")
+        mapper.pauseForSteamSession()
+        check("map-pause-idempotent", mapper.pausedByUser, "still paused")
+
+        let g2 = PerfSampler.shared.sampleOnce()
+        if let gp = g2.gpuPercent {
+            check("gpu-finite-2", gp.isFinite && gp >= 0 && gp <= 100, String(format: "%.1f", gp))
+        } else {
+            check("gpu-nil-ok", true, g2.gpuNote)
+        }
+
+print(failed ? "self-test failed" : "self-test ok")
         return failed ? 1 : 0
     }
 }

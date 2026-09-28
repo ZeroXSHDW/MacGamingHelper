@@ -14,11 +14,11 @@ enum EasyRun {
         goPlayPage: Bool = true
     ) {
         let settings = AppSettings.shared
+        let already = settings.gamingSessionActive && settings.showOverlay && settings.overlayMode == .performance
+
         settings.showMenuBar = true
-        settings.showOverlay = true
         settings.overlayMode = .performance
         settings.overlayEdge = .top
-        settings.gamingSessionActive = true
         settings.metricController = true
         settings.metricCPU = true
         settings.metricMemory = true
@@ -28,24 +28,35 @@ enum EasyRun {
         settings.metricMapping = true
         settings.metricAwake = true
         settings.pingEnabled = true
+        // Order: session first (may auto-show overlay), then force overlay on
+        settings.gamingSessionActive = true
+        settings.showOverlay = true
 
-        if pauseMappingForSteam, let mapper, mapper.enabled, !mapper.pausedByUser {
-            mapper.togglePauseHotkey()
+        if pauseMappingForSteam || openSteam {
+            mapper?.pauseForSteamSession()
         }
 
         MenuBarController.shared.applyVisibility()
-        GamingOverlayController.shared.applyVisibility()
+        if !already {
+            GamingOverlayController.shared.applyVisibility()
+        } else {
+            // Idempotent re-entry: ensure bar visible + sampler running
+            GamingOverlayController.shared.applyVisibility()
+        }
         settings.syncKeepAwake()
 
         if goPlayPage {
             NotificationCenter.default.post(name: .mghGoPage, object: NavPage.play.rawValue)
         }
-        MenuBarController.shared.openMainWindow()
+        if !settings.startMinimizedToMenuBar || !already {
+            MenuBarController.shared.openMainWindow()
+        }
         MenuBarController.shared.rebuildMenuPublic()
 
         if openSteam {
-            if let mapper, let launchers {
-                GameSession.prepSteamSession(mapper: mapper, launchers: launchers)
+            // Mapping already paused stickily — open Big Picture without mapper.stop() thrash
+            if let launchers {
+                launchers.openSteamBigPicture()
             } else {
                 SteamShelf.openBigPicture()
             }
@@ -55,10 +66,11 @@ enum EasyRun {
     static func stopGaming() {
         let settings = AppSettings.shared
         settings.gamingSessionActive = false
-        // Keep overlay preference but allow hide for “stop session” clarity
         settings.showOverlay = false
+        // Force keep-awake clear even if didSets raced
+        KeepAwake.shared.update(active: false)
+        GamingOverlayController.shared.hideForStop()
         settings.syncKeepAwake()
-        GamingOverlayController.shared.applyVisibility()
         MenuBarController.shared.rebuildMenuPublic()
     }
 

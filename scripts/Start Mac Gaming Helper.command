@@ -1,5 +1,5 @@
 #!/bin/bash
-# Double-click to open Mac Gaming Helper with Start-gaming defaults.
+# Double-click to open Mac Gaming Helper (/Applications build) with Start-gaming defaults.
 set -euo pipefail
 APP="/Applications/Mac Gaming Helper.app"
 if [[ ! -d "$APP" ]]; then
@@ -10,7 +10,11 @@ if [[ ! -d "$APP" ]]; then
   exit 1
 fi
 
-# Clear quarantine (Gatekeeper friendliness)
+# Prefer /Applications when both exist
+if [[ -d "/Applications/Mac Gaming Helper.app" ]]; then
+  APP="/Applications/Mac Gaming Helper.app"
+fi
+
 xattr -cr "$APP" 2>/dev/null || true
 
 DOMAIN="com.zeroxshdw.mac-gaming-helper"
@@ -29,4 +33,5 @@ defaults write "$DOMAIN" settings.metricMapping -bool true
 defaults write "$DOMAIN" settings.metricAwake -bool true
 defaults write "$DOMAIN" settings.pingEnabled -bool true
 
-open -a "$APP"
+# Open by path so we always hit this build (not a stale Launch Services match)
+open "$APP"

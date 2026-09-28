@@ -68,6 +68,17 @@ final class GamingOverlayController: ObservableObject {
         applyVisibility()
     }
 
+    /// Stop gaming: hide panel, stop samplers, tear down to avoid zombie windows.
+    func hideForStop() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        PerfSampler.shared.stop()
+        panel?.orderOut(nil)
+        panel?.close()
+        panel = nil
+        host = nil
+    }
+
     func refresh() {
         guard let settings, settings.effectiveOverlayVisible else { return }
         rebuildRoot()
@@ -98,6 +109,8 @@ final class GamingOverlayController: ObservableObject {
     }
 
     private func show() {
+        // --self-test and early launch must not create panels
+        guard NSApp.isRunning else { return }
         guard monitor != nil, mapper != nil, let settings else { return }
         if panel == nil {
             let hosting = NSHostingView(rootView: AnyView(EmptyView()))
@@ -115,6 +128,7 @@ final class GamingOverlayController: ObservableObject {
             panel.backgroundColor = .clear
             panel.isOpaque = false
             panel.hasShadow = true
+            panel.becomesKeyOnlyIfNeeded = true
             panel.contentView = hosting
             self.panel = panel
             self.host = hosting
@@ -138,6 +152,8 @@ final class GamingOverlayController: ObservableObject {
     }
 
     private func hide() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
         panel?.orderOut(nil)
     }
 
@@ -526,13 +542,13 @@ enum OverlayStyle {
         return Theme.good
     }
     static func load(_ v: Double?) -> Color {
-        guard let v else { return Theme.mute }
+        guard let v, v.isFinite else { return Theme.mute }
         if v >= 85 { return Theme.bad }
         if v >= 60 { return Theme.warn }
         return Theme.good
     }
     static func ping(_ ms: Double?) -> Color {
-        guard let ms else { return Theme.mute }
+        guard let ms, ms.isFinite else { return Theme.mute }
         if ms < 50 { return Theme.good }
         if ms < 100 { return Theme.warn }
         return Theme.bad

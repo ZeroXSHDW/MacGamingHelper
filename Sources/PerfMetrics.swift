@@ -38,6 +38,9 @@ final class PerfSampler: ObservableObject {
     private var pingHostCached = "1.1.1.1"
     private var pingEnabled = true
     private var active = false
+    private var frontmostCache: (cpu: Double?, name: String) = (nil, "")
+    private var frontmostTask: Task<Void, Never>?
+    private var lastFrontmostAt = Date.distantPast
 
     func start(pingHost: String, pingEnabled: Bool) {
         self.pingHostCached = pingHost
@@ -56,6 +59,8 @@ final class PerfSampler: ObservableObject {
         timer = nil
         pingTask?.cancel()
         pingTask = nil
+        frontmostTask?.cancel()
+        frontmostTask = nil
     }
 
     func updatePingConfig(host: String, enabled: Bool) {
@@ -72,21 +77,51 @@ final class PerfSampler: ObservableObject {
     /// One-shot sample for self-test (does not require overlay visible).
     func sampleOnce() -> Snapshot {
         var s = snap
-        s.cpuPercent = Self.readCPU(&prevCPU)
+        s.cpuPercent = Self.finitePercent(Self.readCPU(&prevCPU))
         let mem = Self.readMemory()
-        s.memoryUsedGB = mem.usedGB
-        s.memoryPressurePercent = mem.pressure
+        s.memoryUsedGB = Self.finite(mem.usedGB, min: 0, max: 1024)
+        s.memoryPressurePercent = Self.finitePercent(mem.pressure)
         let gpu = Self.readGPU()
-        s.gpuPercent = gpu.percent
-        s.gpuAvailable = gpu.available
-        s.gpuNote = gpu.note
+        let gpuPct = Self.finitePercent(gpu.percent)
+        s.gpuPercent = gpuPct
+        s.gpuAvailable = gpu.available && gpuPct != nil
+        s.gpuNote = s.gpuAvailable ? gpu.note : (gpu.available ? "invalid reading" : gpu.note)
         s.panelHz = Self.readPanelHz()
-        let front = Self.readFrontmostCPU()
-        s.frontmostCPU = front.cpu
-        s.frontmostName = front.name
+        if active {
+            s.frontmostCPU = Self.finite(frontmostCache.cpu, min: 0, max: 999)
+            s.frontmostName = frontmostCache.name
+            scheduleFrontmostSampleIfNeeded()
+        } else {
+            // Self-test / offline: one blocking sample is OK (not in gaming loop)
+            let front = Self.readFrontmostCPU()
+            frontmostCache = front
+            s.frontmostCPU = Self.finite(front.cpu, min: 0, max: 999)
+            s.frontmostName = front.name
+        }
         s.sampledAt = Date()
         snap = s
         return s
+    }
+
+    private func scheduleFrontmostSampleIfNeeded() {
+        if Date().timeIntervalSince(lastFrontmostAt) < 1.0 { return }
+        lastFrontmostAt = Date()
+        frontmostTask?.cancel()
+        frontmostTask = Task.detached(priority: .utility) {
+            let front = Self.readFrontmostCPU()
+            await MainActor.run { [weak self] in
+                self?.frontmostCache = front
+            }
+        }
+    }
+
+    private static func finite(_ v: Double?, min: Double, max: Double) -> Double? {
+        guard let v, v.isFinite else { return nil }
+        return Swift.min(max, Swift.max(min, v))
+    }
+
+    private static func finitePercent(_ v: Double?) -> Double? {
+        finite(v, min: 0, max: 100)
     }
 
     private func tick() {
@@ -103,10 +138,11 @@ final class PerfSampler: ObservableObject {
                     await MainActor.run {
                         guard let self, self.active, self.pingEnabled else { return }
                         var cur = self.snap
-                        if let ms {
-                            cur.pingMs = ms
+                        if let ms, ms.isFinite, ms >= 0 {
+                            cur.pingMs = min(ms, 9999)
                             cur.pingOK = true
                         } else {
+                            cur.pingMs = nil
                             cur.pingOK = false
                         }
                         self.snap = cur
@@ -244,7 +280,7 @@ final class PerfSampler: ObservableObject {
 
     // MARK: - Frontmost app CPU (honest “Game CPU” proxy)
 
-    private static func readFrontmostCPU() -> (cpu: Double?, name: String) {
+    nonisolated private static func readFrontmostCPU() -> (cpu: Double?, name: String) {
         guard let app = NSWorkspace.shared.frontmostApplication else {
             return (nil, "")
         }

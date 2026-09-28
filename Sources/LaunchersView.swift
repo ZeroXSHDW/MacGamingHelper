@@ -191,6 +191,18 @@ struct HelpPage: View {
 
                 Card {
                     VStack(alignment: .leading, spacing: 8) {
+                        Text("About")
+                            .font(.headline)
+                        Text("Mac Gaming Helper \(Theme.version)")
+                        Text("⌥⌘M pauses Mapping while the Performance Bar is up (enable Mapping first). Overlay does not steal the hotkey from the main app.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                    }
+                    .font(.callout)
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("Permissions checklist")
                             .font(.headline)
                         Text("1. Bluetooth — System Settings → Bluetooth → pair Wireless Controller (DS4).")

@@ -130,6 +130,10 @@ struct PlayPage: View {
         }
     }
 
+    private var steamInstalled: Bool {
+        launchers.items.contains { $0.id == "steam" && $0.isInstalled }
+    }
+
     private var steamCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 10) {
@@ -137,13 +141,23 @@ struct PlayPage: View {
                     Text("Steam library").font(.headline)
                     Spacer()
                     PillButton(title: "Refresh") { steam.refresh() }
-                    PillButton(title: "Big Picture", primary: true) { SteamShelf.openBigPicture() }
+                    if steamInstalled {
+                        PillButton(title: "Big Picture", primary: true) { SteamShelf.openBigPicture() }
+                    } else {
+                        Text("Steam not installed")
+                            .font(.caption)
+                            .foregroundStyle(Theme.warn)
+                    }
                 }
                 TextField("Filter games", text: $steam.filter)
                     .textFieldStyle(.roundedBorder)
+                    .disabled(!steamInstalled)
                 Text(steam.note).font(.caption).foregroundStyle(Theme.mute)
-                if steam.displayed.isEmpty {
-                    Text("No titles to show. Install in Steam, then Refresh.")
+                if !steamInstalled {
+                    Text("Install Steam to browse and launch a library here.")
+                        .foregroundStyle(Theme.mute)
+                } else if steam.displayed.isEmpty {
+                    Text("No titles to show. Install games in Steam, then Refresh.")
                         .foregroundStyle(Theme.mute)
                 } else {
                     ForEach(steam.displayed.prefix(50)) { game in
@@ -162,8 +176,9 @@ struct PlayPage: View {
                             }
                             Spacer()
                             PillButton(title: "Launch", primary: true) {
-                                if mapper.enabled { mapper.stop() }
+                                mapper.pauseForSteamSession()
                                 settings.gamingSessionActive = true
+                                settings.showOverlay = true
                                 steam.launch(game)
                             }
                         }

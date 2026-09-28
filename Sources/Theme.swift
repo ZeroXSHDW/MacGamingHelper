@@ -2,7 +2,7 @@ import SwiftUI
 
 enum Theme {
     static let name = "Mac Gaming Helper"
-    static let version = "3.4.0"
+    static let version = "3.4.1"
     static let accent = Color(red: 0.18, green: 0.55, blue: 0.95)
     static let ds4Blue = Color(red: 0.00, green: 0.48, blue: 0.90)
     static let card = Color(nsColor: .controlBackgroundColor)

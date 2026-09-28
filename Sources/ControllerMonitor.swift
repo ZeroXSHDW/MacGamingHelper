@@ -37,6 +37,8 @@ final class ControllerMonitor: ObservableObject {
     private weak var settings: AppSettings?
     private var preferredStableKey: String?
     private var wasConnected = false
+    private var lastRediscoverRequest = Date.distantPast
+    private var wakeObserver: NSObjectProtocol?
 
     var lastRediscoverDescription: String {
         guard let d = lastRediscoverAt else { return "never" }
@@ -72,13 +74,35 @@ final class ControllerMonitor: ObservableObject {
             Task { @MainActor in self?.refresh(reason: nil) }
         }
         requestNotificationPermission()
+        if wakeObserver == nil {
+            wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    self?.statusLine = "Mac woke — rediscovering controllers…"
+                    // Allow rediscover after wake even if recently scanned
+                    self?.lastRediscoverRequest = .distantPast
+                    self?.rediscover()
+                }
+            }
+        }
         rediscover()
         refresh(reason: "start")
     }
 
     func rediscover() {
+        let now = Date()
+        if discovering || now.timeIntervalSince(lastRediscoverRequest) < 1.5 {
+            statusLine = discovering
+                ? "Scan already in progress…"
+                : "Rediscover debounced — wait a moment, then try again."
+            return
+        }
+        lastRediscoverRequest = now
         discovering = true
-        lastRediscoverAt = Date()
+        lastRediscoverAt = now
         statusLine = "Scanning Bluetooth / USB for DualShock 4 and other pads…"
         GCController.stopWirelessControllerDiscovery()
         GCController.startWirelessControllerDiscovery { [weak self] in
@@ -155,10 +179,11 @@ final class ControllerMonitor: ObservableObject {
     }
 
     private func stableID(for controller: GCController) -> String {
+        // Stable across reconnect/sleep — do NOT use ObjectIdentifier (new GCController instance each time).
         let vendor = controller.vendorName ?? "pad"
         let cat = controller.productCategory
         let idx = controller.playerIndex.rawValue
-        return "\(vendor)|\(cat)|\(idx)|\(ObjectIdentifier(controller).hashValue)"
+        return "\(vendor)|\(cat)|\(idx)"
     }
 
     func refresh(reason: String?) {
@@ -190,7 +215,7 @@ final class ControllerMonitor: ObservableObject {
         evaluateLowBattery(in: next)
         if let reason {
             if next.isEmpty {
-                statusLine = "No controller connected (\(reason)). Try USB Micro-USB + PS, or Share+PS → Bluetooth → Rediscover. See Pairing / Setup."
+                statusLine = "No controller connected (\(reason)). If Bluetooth failed: plug USB Micro-USB, hold PS until Mac sees the pad, then Rediscover. Pairing / Setup has USB-first steps."
             } else {
                 let names = next.map(\.kind.rawValue).joined(separator: ", ")
                 statusLine = "\(next.count) controller(s): \(names) · \(reason)"

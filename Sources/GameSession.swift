@@ -86,16 +86,13 @@ final class GameSession: ObservableObject {
     }
 
     static func prepSteamSession(mapper: InputMapper, launchers: LauncherShelf) {
-        if mapper.enabled { mapper.stop() }
+        mapper.pauseForSteamSession()
         let settings = AppSettings.shared
         settings.gamingSessionActive = true
-        if settings.overlayAutoShowOnSession {
-            settings.showOverlay = true
-            if settings.overlayMode == .compact {
-                settings.overlayMode = .performance
-            }
-            GamingOverlayController.shared.applyVisibility()
-        }
+        settings.showOverlay = true
+        settings.overlayMode = .performance
+        GamingOverlayController.shared.applyVisibility()
+        settings.syncKeepAwake()
         launchers.openSteamBigPicture()
     }
 
