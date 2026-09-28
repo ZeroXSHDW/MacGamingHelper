@@ -3,8 +3,6 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Prefer SDKs that match the installed swiftc. MacOSX27.sdk currently requires
-# Swift 6.4; Command Line Tools on this Mac ship 6.3.x — use 26.x / 15.x.
 pick_sdk() {
   local candidate
   for candidate in \
@@ -19,7 +17,6 @@ pick_sdk() {
       return 0
     fi
   done
-  # Only use 27.x if nothing else exists (may need a matching toolchain).
   for candidate in \
     /Library/Developer/CommandLineTools/SDKs/MacOSX27.sdk \
     /Library/Developer/CommandLineTools/SDKs/MacOSX27.0.sdk
@@ -40,7 +37,20 @@ fi
 echo "sdk $sdk"
 stage="$root/dist/Mac Gaming Helper.app"
 rm -rf "$stage"
-mkdir -p "$stage/Contents/MacOS" "$stage/Contents/Resources" "$root/build"
+mkdir -p "$stage/Contents/MacOS" "$stage/Contents/Resources" "$root/build" "$root/Resources"
+
+# Generate stylized PNGs into Resources/
+swiftc -sdk "$sdk" -target arm64-apple-macosx14.0 -framework AppKit \
+  -o "$root/build/make-assets" "$root/scripts/make-assets.swift"
+"$root/build/make-assets" "$root/Resources"
+
+# Marketing copies for README (optional, regenerated each build)
+mkdir -p "$root/docs/screenshots"
+cp -f "$root/Resources/banner.png" "$root/docs/screenshots/banner.png"
+cp -f "$root/Resources/hero-pad-lit.png" "$root/docs/screenshots/controller-hero.png"
+cp -f "$root/Resources/coach-usb.png" "$root/docs/screenshots/pairing-usb.png"
+cp -f "$root/Resources/coach-bluetooth.png" "$root/docs/screenshots/pairing-bluetooth.png"
+
 cat > "$stage/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -57,9 +67,9 @@ cat > "$stage/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>2.1.0</string>
+  <string>2.2.0</string>
   <key>CFBundleVersion</key>
-  <string>3</string>
+  <string>4</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>
@@ -76,10 +86,16 @@ cat > "$stage/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 printf 'APPL????' > "$stage/Contents/PkgInfo"
+
+# Richer app icon from AppIcon-1024.png
 swiftc -sdk "$sdk" -target arm64-apple-macosx14.0 -framework AppKit \
   -o "$root/build/make-icon" "$root/scripts/make-icon.swift"
-"$root/build/make-icon" "$root/build/AppIcon.iconset"
+"$root/build/make-icon" "$root/build/AppIcon.iconset" "$root/Resources/AppIcon-1024.png"
 iconutil -c icns "$root/build/AppIcon.iconset" -o "$stage/Contents/Resources/AppIcon.icns"
+
+# Bundle UI PNGs (exclude master icon source from runtime needs but include is fine)
+cp -f "$root/Resources/"*.png "$stage/Contents/Resources/"
+
 sources=("$root"/Sources/*.swift)
 swiftc -parse-as-library -O -sdk "$sdk" -target arm64-apple-macosx14.0 \
   -framework SwiftUI -framework AppKit -framework GameController -framework CoreHaptics \
@@ -88,3 +104,4 @@ swiftc -parse-as-library -O -sdk "$sdk" -target arm64-apple-macosx14.0 \
 codesign --force --sign - --entitlements "$root/scripts/entitlements.plist" "$stage" 2>/dev/null \
   || codesign --force --sign - "$stage"
 echo "built $stage"
+echo "resources: $(ls "$stage/Contents/Resources" | wc -l | tr -d ' ') files"

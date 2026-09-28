@@ -71,6 +71,13 @@ enum SelfTest {
         let steam = LauncherShelf.catalog[0].located()
         check("steam-locate", steam.id == "steam", steam.appURL?.path ?? "not installed (ok)")
 
+        check("art-list", PairingCoach.artNames.count >= 8, "\(PairingCoach.artNames.count) art names")
+        var artHits = 0
+        for name in PairingCoach.artNames {
+            if BundleArt.nsImage(name) != nil { artHits += 1 }
+        }
+        check("art-bundle", artHits >= 6, "\(artHits)/\(PairingCoach.artNames.count) images loadable")
+
         print(failed ? "self-test failed" : "self-test ok")
         return failed ? 1 : 0
     }

@@ -6,28 +6,45 @@ struct ControllerPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 20) {
                 header
+                HeroPadArt(connected: monitor.selected.connected, maxHeight: 210)
+                    .frame(maxWidth: .infinity)
                 if !monitor.snapshots.isEmpty {
                     picker
                 }
-                DualShockDiagram(snap: monitor.selected)
+                if monitor.selected.connected {
+                    DualShockDiagram(snap: monitor.selected)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                }
                 readouts
-                lightAndHaptics
+                if monitor.selected.connected {
+                    lightAndHaptics
+                }
                 tips
             }
             .padding(28)
+            .animation(.easeInOut(duration: 0.3), value: monitor.selected.connected)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Theme.heroGradient.opacity(0.35))
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("DualShock 4 Desk")
-                .font(.largeTitle.weight(.semibold))
-            Text(monitor.statusLine)
-                .foregroundStyle(Theme.mute)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("DualShock 4 Desk")
+                        .font(.largeTitle.weight(.bold))
+                        .tracking(-0.4)
+                    Text(monitor.statusLine)
+                        .foregroundStyle(Theme.mute)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                BundledImage(name: "badge-help", maxHeight: 56, cornerRadius: 12)
+                    .frame(width: 100)
+                    .opacity(0.9)
+            }
             HStack(spacing: 10) {
                 PillButton(title: monitor.discovering ? "Scanning…" : "Rediscover", primary: true) {
                     monitor.rediscover()
@@ -97,9 +114,16 @@ struct ControllerPage: View {
                     AxisLine(name: "L2 trigger", value: s.lt, bipolar: false)
                     AxisLine(name: "R2 trigger", value: s.rt, bipolar: false)
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Text("No DualShock 4 yet — try this:")
                             .font(.callout.weight(.semibold))
+                            .foregroundStyle(Color.primary)
+                        HStack(spacing: 12) {
+                            CoachStepArt(imageName: "coach-usb", title: "USB first")
+                            CoachStepArt(imageName: "coach-share-ps", title: "Share + PS")
+                            CoachStepArt(imageName: "coach-bluetooth", title: "Bluetooth")
+                            CoachStepArt(imageName: "coach-reset", title: "Reset")
+                        }
                         Text("1. Lights flash but pad never appears? Plug Micro-USB (data cable) first, press PS, then Rediscover.")
                         Text("2. Or hold Share + PS until the light flashes quickly → Bluetooth → Wireless Controller.")
                         Text("3. Still invisible? Reset pinhole (paperclip, ~5s), forget stale Bluetooth entries, retry USB.")

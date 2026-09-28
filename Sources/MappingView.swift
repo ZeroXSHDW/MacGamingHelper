@@ -7,10 +7,19 @@ struct MappingPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Keyboard & mouse mapping")
-                    .font(.largeTitle.weight(.semibold))
-                Text("Optional path for games that ignore DualShock 4. Maps the selected pad to keys and mouse. Offline, no accounts.")
-                    .foregroundStyle(Theme.mute)
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Keyboard & mouse mapping")
+                            .font(.largeTitle.weight(.bold))
+                            .tracking(-0.4)
+                        Text("Optional path for games that ignore DualShock 4. Maps the selected pad to keys and mouse. Offline, no accounts.")
+                            .foregroundStyle(Theme.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    BundledImage(name: "badge-mapping", maxHeight: 100, cornerRadius: 14)
+                        .frame(width: 160)
+                }
 
                 Card {
                     VStack(alignment: .leading, spacing: 12) {
@@ -132,6 +141,7 @@ struct MappingPage: View {
             }
             .padding(28)
         }
+        .background(Theme.heroGradient.opacity(0.2))
     }
 
     private func label(for b: MappingBinding) -> String {

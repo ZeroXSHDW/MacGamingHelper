@@ -38,6 +38,12 @@ enum PairingCoach {
         ("Accessibility", "Only needed when Mapping is ON. This app posts keyboard/mouse events (CGEvent). Deny Mapping safely stays off."),
         ("Input Monitoring", "Usually not required for Game Controller readouts. Grant only if macOS asks while troubleshooting HID."),
     ]
+
+    /// Illustration asset names shipped in Resources/.
+    static let artNames = [
+        "hero-pad", "hero-pad-lit", "coach-usb", "coach-bluetooth",
+        "coach-reset", "coach-share-ps", "badge-mapping", "badge-launchers", "badge-help",
+    ]
 }
 
 struct SetupPage: View {
@@ -47,18 +53,61 @@ struct SetupPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Pairing / Setup")
-                    .font(.largeTitle.weight(.semibold))
-                Text("DualShock 4 on this Mac — Bluetooth, USB-first rescue, reset, Steam vs Mapping, and permissions.")
-                    .foregroundStyle(Theme.mute)
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Pairing / Setup")
+                            .font(.largeTitle.weight(.bold))
+                            .tracking(-0.4)
+                        Text("DualShock 4 on this Mac — Bluetooth, USB-first rescue, reset, Steam vs Mapping, and permissions.")
+                            .foregroundStyle(Theme.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    HeroPadArt(connected: monitor.selected.connected, maxHeight: 100)
+                        .frame(width: 180)
+                }
+
+                // Visual strip of coach arts
+                Card {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Illustrated guide")
+                            .font(.headline)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 12)], spacing: 12) {
+                            CoachStepArt(imageName: "coach-share-ps", title: "Share + PS")
+                            CoachStepArt(imageName: "coach-bluetooth", title: "Bluetooth")
+                            CoachStepArt(imageName: "coach-usb", title: "USB-first")
+                            CoachStepArt(imageName: "coach-reset", title: "Reset pinhole")
+                        }
+                    }
+                }
 
                 statusCard
 
-                coachCard(title: "Bluetooth pairing (Share + PS)", steps: PairingCoach.bluetoothSteps, tint: Theme.ds4Blue)
-                coachCard(title: "USB-first when Bluetooth won’t list the pad", steps: PairingCoach.usbFirstSteps, tint: Theme.warn)
-                coachCard(title: "Reset pinhole (stuck / invisible pad)", steps: PairingCoach.resetSteps, tint: Theme.bad)
-                coachCard(title: "Steam Big Picture vs Mapping", steps: PairingCoach.steamVsMapping, tint: Theme.accent)
+                coachCard(
+                    title: "Bluetooth pairing (Share + PS)",
+                    steps: PairingCoach.bluetoothSteps,
+                    tint: Theme.ds4Blue,
+                    art: "coach-share-ps"
+                )
+                coachCard(
+                    title: "USB-first when Bluetooth won’t list the pad",
+                    steps: PairingCoach.usbFirstSteps,
+                    tint: Theme.warn,
+                    art: "coach-usb"
+                )
+                coachCard(
+                    title: "Reset pinhole (stuck / invisible pad)",
+                    steps: PairingCoach.resetSteps,
+                    tint: Theme.bad,
+                    art: "coach-reset"
+                )
+                coachCard(
+                    title: "Steam Big Picture vs Mapping",
+                    steps: PairingCoach.steamVsMapping,
+                    tint: Theme.accent,
+                    art: "badge-mapping"
+                )
 
                 permissionsCard
                 actionsCard
@@ -66,7 +115,7 @@ struct SetupPage: View {
             }
             .padding(28)
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Theme.heroGradient.opacity(0.25))
     }
 
     private var statusCard: some View {
@@ -98,25 +147,31 @@ struct SetupPage: View {
         }
     }
 
-    private func coachCard(title: String, steps: [String], tint: Color) -> some View {
+    private func coachCard(title: String, steps: [String], tint: Color, art: String) -> some View {
         Card {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(tint)
-                        .frame(width: 4, height: 18)
-                    Text(title)
-                        .font(.headline)
-                }
-                ForEach(Array(steps.enumerated()), id: \.offset) { idx, step in
-                    HStack(alignment: .top, spacing: 10) {
-                        Text("\(idx + 1).")
-                            .font(.callout.monospaced().weight(.bold))
-                            .foregroundStyle(tint)
-                            .frame(width: 24, alignment: .trailing)
-                        Text(step)
-                            .font(.callout)
-                            .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 14) {
+                    BundledImage(name: art, maxHeight: 88, cornerRadius: 12)
+                        .frame(width: 140)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(tint)
+                                .frame(width: 4, height: 18)
+                            Text(title)
+                                .font(.headline)
+                        }
+                        ForEach(Array(steps.enumerated()), id: \.offset) { idx, step in
+                            HStack(alignment: .top, spacing: 10) {
+                                Text("\(idx + 1).")
+                                    .font(.callout.monospaced().weight(.bold))
+                                    .foregroundStyle(tint)
+                                    .frame(width: 24, alignment: .trailing)
+                                Text(step)
+                                    .font(.callout)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                     }
                 }
             }

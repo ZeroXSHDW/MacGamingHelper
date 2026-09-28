@@ -6,10 +6,19 @@ struct LaunchersPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Launchers")
-                    .font(.largeTitle.weight(.semibold))
-                Text("Same job as Game Bay’s Play page: open the tools that already run games on this Mac.")
-                    .foregroundStyle(Theme.mute)
+                HStack(alignment: .top, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Launchers")
+                            .font(.largeTitle.weight(.bold))
+                            .tracking(-0.4)
+                        Text("Same job as Game Bay’s Play page: open the tools that already run games on this Mac.")
+                            .foregroundStyle(Theme.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 8)
+                    BundledImage(name: "badge-launchers", maxHeight: 100, cornerRadius: 14)
+                        .frame(width: 160)
+                }
 
                 ForEach(launchers.items) { item in
                     launcherCard(item, primary: true)
@@ -80,8 +89,17 @@ struct HelpPage: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Help")
-                    .font(.largeTitle.weight(.semibold))
+                HStack(alignment: .top, spacing: 16) {
+                    Text("Help")
+                        .font(.largeTitle.weight(.bold))
+                        .tracking(-0.4)
+                    Spacer()
+                    BundledImage(name: "badge-help", maxHeight: 80, cornerRadius: 14)
+                        .frame(width: 120)
+                }
+
+                BundledImage(name: "banner", maxHeight: 160, cornerRadius: 16)
+                    .frame(maxWidth: .infinity)
 
                 Card {
                     VStack(alignment: .leading, spacing: 8) {
