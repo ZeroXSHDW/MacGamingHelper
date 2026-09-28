@@ -69,5 +69,3 @@ extension Notification.Name {
     static let mghGoPage = Notification.Name("mghGoPage")
     static let mghRediscover = Notification.Name("mghRediscover")
 }
-
-/// Tiny bridge so RootView can receive menu shortcuts.
