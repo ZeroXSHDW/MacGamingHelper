@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.3.0 — 2026-09-28
+
+- **Gaming Performance Bar** — unified always-on-top Overlay (Compact HUD | Full Performance Bar)
+- Live capsules: Controller + battery, CPU, Memory, GPU (IOKit best-effort), Panel Hz, Game CPU %, Ping, Mapping, Keep-awake
+- Honest FPS policy: shows **Panel Hz** and frontmost **Game CPU** — never invents game FPS
+- Settings → Overlay & performance (metrics checklist, ping host, opacity, top/bottom)
+- Menu bar + ⌃⌥⌘P toggle; auto-show on Prep Steam / gaming session; auto-hide option
+- Ping paused when overlay hidden
+
 ## 3.2.0 — 2026-09-28
 
 - Keep-awake (IOPMAssertion) while Play HUD or Gaming session is on

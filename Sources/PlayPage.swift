@@ -22,7 +22,7 @@ struct PlayPage: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {
-                        if settings.showPlayHUD { StatusChip(text: "HUD ON", color: Theme.good) }
+                        if settings.showOverlay { StatusChip(text: settings.overlayMode == .performance ? "PERF BAR" : "HUD ON", color: Theme.good) }
                         if KeepAwake.shared.isAsserting { StatusChip(text: "AWAKE", color: Theme.accent) }
                     }
                 }
@@ -63,8 +63,8 @@ struct PlayPage: View {
                                 settings.gamingSessionActive = true
                                 GameSession.prepSteamSession(mapper: mapper, launchers: launchers)
                             }
-                            PillButton(title: settings.showPlayHUD ? "Hide Play HUD" : "Show Play HUD") {
-                                settings.showPlayHUD.toggle()
+                            PillButton(title: settings.showOverlay ? "Hide Overlay" : "Show Performance Bar") {
+                                settings.showOverlay.toggle()
                             }
                             PillButton(title: "Rediscover") { monitor.rediscover() }
                         }

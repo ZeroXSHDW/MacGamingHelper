@@ -210,7 +210,10 @@ struct RootView: View {
             GameSession.prepSteamSession(mapper: mapper, launchers: launchers)
         }
         .onReceive(NotificationCenter.default.publisher(for: .mghToggleHUD)) { _ in
-            PlayHUDController.shared.toggle()
+            GamingOverlayController.shared.toggle()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mghToggleOverlayMode)) { _ in
+            GamingOverlayController.shared.toggleMode()
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: monitor.selected.connected)
         .animation(.easeInOut(duration: 0.25), value: monitor.lowBatteryBanner)

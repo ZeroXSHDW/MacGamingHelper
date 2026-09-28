@@ -39,6 +39,23 @@ final class AppSettings: ObservableObject {
         static let audioTester = "settings.audioTester"
         static let hudOriginX = "settings.hudOriginX"
         static let hudOriginY = "settings.hudOriginY"
+        static let showOverlay = "settings.showOverlay"
+        static let overlayMode = "settings.overlayMode"
+        static let overlayEdge = "settings.overlayEdge"
+        static let overlayOpacity = "settings.overlayOpacity"
+        static let overlayAutoShow = "settings.overlayAutoShow"
+        static let overlayAutoHide = "settings.overlayAutoHide"
+        static let pingEnabled = "settings.pingEnabled"
+        static let pingHost = "settings.pingHost"
+        static let metricController = "settings.metricController"
+        static let metricCPU = "settings.metricCPU"
+        static let metricMemory = "settings.metricMemory"
+        static let metricGPU = "settings.metricGPU"
+        static let metricPanel = "settings.metricPanel"
+        static let metricGameCPU = "settings.metricGameCPU"
+        static let metricPing = "settings.metricPing"
+        static let metricMapping = "settings.metricMapping"
+        static let metricAwake = "settings.metricAwake"
     }
 
     @Published var showMenuBar: Bool {
@@ -86,13 +103,60 @@ final class AppSettings: ObservableObject {
     @Published var preferredPadKey: String {
         didSet { d.set(preferredPadKey, forKey: Key.preferredPadKey) }
     }
-    @Published var showPlayHUD: Bool {
+    /// Legacy alias — maps to showOverlay (v3.3 unified Gaming Overlay).
+    var showPlayHUD: Bool {
+        get { showOverlay }
+        set { showOverlay = newValue }
+    }
+
+    @Published var showOverlay: Bool {
         didSet {
-            d.set(showPlayHUD, forKey: Key.showPlayHUD)
-            PlayHUDController.shared.applyVisibility()
+            d.set(showOverlay, forKey: Key.showOverlay)
+            d.set(showOverlay, forKey: Key.showPlayHUD) // keep legacy key in sync
+            GamingOverlayController.shared.applyVisibility()
             syncKeepAwake()
         }
     }
+    @Published var overlayMode: OverlayMode {
+        didSet {
+            d.set(overlayMode.rawValue, forKey: Key.overlayMode)
+            GamingOverlayController.shared.applyVisibility()
+        }
+    }
+    @Published var overlayEdge: OverlayEdge {
+        didSet {
+            d.set(overlayEdge.rawValue, forKey: Key.overlayEdge)
+            GamingOverlayController.shared.applyVisibility()
+        }
+    }
+    @Published var overlayOpacity: Double {
+        didSet { d.set(overlayOpacity, forKey: Key.overlayOpacity) }
+    }
+    @Published var overlayAutoShowOnSession: Bool {
+        didSet { d.set(overlayAutoShowOnSession, forKey: Key.overlayAutoShow) }
+    }
+    @Published var overlayAutoHideIdle: Bool {
+        didSet { d.set(overlayAutoHideIdle, forKey: Key.overlayAutoHide) }
+    }
+    @Published var pingEnabled: Bool {
+        didSet { d.set(pingEnabled, forKey: Key.pingEnabled) }
+    }
+    @Published var pingHost: String {
+        didSet { d.set(pingHost, forKey: Key.pingHost) }
+    }
+    @Published var metricController: Bool { didSet { d.set(metricController, forKey: Key.metricController) } }
+    @Published var metricCPU: Bool { didSet { d.set(metricCPU, forKey: Key.metricCPU) } }
+    @Published var metricMemory: Bool { didSet { d.set(metricMemory, forKey: Key.metricMemory) } }
+    @Published var metricGPU: Bool { didSet { d.set(metricGPU, forKey: Key.metricGPU) } }
+    @Published var metricPanel: Bool { didSet { d.set(metricPanel, forKey: Key.metricPanel) } }
+    @Published var metricGameCPU: Bool { didSet { d.set(metricGameCPU, forKey: Key.metricGameCPU) } }
+    @Published var metricPing: Bool {
+        didSet { d.set(metricPing, forKey: Key.metricPing) }
+    }
+    @Published var metricMapping: Bool { didSet { d.set(metricMapping, forKey: Key.metricMapping) } }
+    @Published var metricAwake: Bool { didSet { d.set(metricAwake, forKey: Key.metricAwake) } }
+
+    var effectiveOverlayVisible: Bool { showOverlay }
     @Published var stickCurve: StickCurve {
         didSet { d.set(stickCurve.rawValue, forKey: Key.stickCurve) }
     }
@@ -114,7 +178,11 @@ final class AppSettings: ObservableObject {
     @Published var gamingSessionActive: Bool {
         didSet {
             d.set(gamingSessionActive, forKey: Key.gamingSessionActive)
+            if gamingSessionActive && overlayAutoShowOnSession {
+                showOverlay = true
+            }
             syncKeepAwake()
+            GamingOverlayController.shared.applyVisibility()
         }
     }
     @Published var audioConnectCues: Bool {
@@ -145,7 +213,36 @@ final class AppSettings: ObservableObject {
         pauseMappingWhenInactive = d.object(forKey: Key.pauseMappingInactive) as? Bool ?? true
         focusModeController = d.bool(forKey: Key.focusMode)
         preferredPadKey = d.string(forKey: Key.preferredPadKey) ?? ""
-        showPlayHUD = d.bool(forKey: Key.showPlayHUD)
+        // Overlay: migrate legacy showPlayHUD
+        if d.object(forKey: Key.showOverlay) != nil {
+            showOverlay = d.bool(forKey: Key.showOverlay)
+        } else {
+            showOverlay = d.bool(forKey: Key.showPlayHUD)
+        }
+        if let raw = d.string(forKey: Key.overlayMode), let m = OverlayMode(rawValue: raw) {
+            overlayMode = m
+        } else {
+            overlayMode = .performance
+        }
+        if let raw = d.string(forKey: Key.overlayEdge), let e = OverlayEdge(rawValue: raw) {
+            overlayEdge = e
+        } else {
+            overlayEdge = .top
+        }
+        overlayOpacity = d.object(forKey: Key.overlayOpacity) as? Double ?? 0.92
+        overlayAutoShowOnSession = d.object(forKey: Key.overlayAutoShow) as? Bool ?? true
+        overlayAutoHideIdle = d.bool(forKey: Key.overlayAutoHide)
+        pingEnabled = d.object(forKey: Key.pingEnabled) as? Bool ?? true
+        pingHost = d.string(forKey: Key.pingHost) ?? "1.1.1.1"
+        metricController = d.object(forKey: Key.metricController) as? Bool ?? true
+        metricCPU = d.object(forKey: Key.metricCPU) as? Bool ?? true
+        metricMemory = d.object(forKey: Key.metricMemory) as? Bool ?? true
+        metricGPU = d.object(forKey: Key.metricGPU) as? Bool ?? true
+        metricPanel = d.object(forKey: Key.metricPanel) as? Bool ?? true
+        metricGameCPU = d.object(forKey: Key.metricGameCPU) as? Bool ?? true
+        metricPing = d.object(forKey: Key.metricPing) as? Bool ?? true
+        metricMapping = d.object(forKey: Key.metricMapping) as? Bool ?? true
+        metricAwake = d.object(forKey: Key.metricAwake) as? Bool ?? true
         if let raw = d.string(forKey: Key.stickCurve), let c = StickCurve(rawValue: raw) {
             stickCurve = c
         } else {
@@ -165,7 +262,7 @@ final class AppSettings: ObservableObject {
     }
 
     func syncKeepAwake() {
-        KeepAwake.shared.update(active: showPlayHUD || gamingSessionActive)
+        KeepAwake.shared.update(active: showOverlay || gamingSessionActive)
     }
 
     func hudOrigin() -> CGPoint? {

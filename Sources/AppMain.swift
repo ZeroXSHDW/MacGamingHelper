@@ -45,7 +45,7 @@ struct MacGamingHelperApp: App {
                     mapper.bind(monitor: monitor, settings: settings)
                     MenuBarController.shared.bind(monitor: monitor, settings: settings, mapper: mapper, launchers: launchers)
                     MenuBarController.shared.applyVisibility()
-                    PlayHUDController.shared.bind(monitor: monitor, mapper: mapper, settings: settings)
+                    GamingOverlayController.shared.bind(monitor: monitor, mapper: mapper, settings: settings)
                     session.start()
                     steam.refresh()
                     heroic.refresh()
@@ -99,8 +99,12 @@ struct MacGamingHelperApp: App {
                 Button("Prep Steam Session") {
                     NotificationCenter.default.post(name: .mghPrepSteam, object: nil)
                 }
-                Button("Toggle Play HUD") {
+                Button("Toggle Gaming Overlay") {
                     NotificationCenter.default.post(name: .mghToggleHUD, object: nil)
+                }
+                .keyboardShortcut("p", modifiers: [.control, .option, .command])
+                Button("Overlay: Compact / Performance") {
+                    NotificationCenter.default.post(name: .mghToggleOverlayMode, object: nil)
                 }
             }
         }
@@ -114,4 +118,6 @@ extension Notification.Name {
     static let mghProfileSlot = Notification.Name("mghProfileSlot")
     static let mghPrepSteam = Notification.Name("mghPrepSteam")
     static let mghToggleHUD = Notification.Name("mghToggleHUD")
+    static let mghToggleOverlayMode = Notification.Name("mghToggleOverlayMode")
 }
+

@@ -25,7 +25,7 @@ struct SettingsPage: View {
                             .onChange(of: settings.showMenuBar) { _, _ in
                                 MenuBarController.shared.applyVisibility()
                             }
-                        Toggle("Play HUD (always-on-top while gaming)", isOn: $settings.showPlayHUD)
+                        Toggle("Gaming Overlay (always-on-top)", isOn: $settings.showOverlay)
                         Toggle("Gaming session active (prevent display sleep)", isOn: $settings.gamingSessionActive)
                         if KeepAwake.shared.isAsserting {
                             Text("Keep-awake assertion is active.")
@@ -118,6 +118,58 @@ struct SettingsPage: View {
                 }
 
                 Card {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Overlay & performance")
+                            .font(.headline)
+                        Toggle("Show Gaming Overlay", isOn: $settings.showOverlay)
+                        Picker("Mode", selection: $settings.overlayMode) {
+                            ForEach(OverlayMode.allCases) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        Picker("Bar position", selection: $settings.overlayEdge) {
+                            ForEach(OverlayEdge.allCases) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        HStack {
+                            Text("Opacity")
+                            Slider(value: $settings.overlayOpacity, in: 0.45...1.0)
+                            Text(String(format: "%.0f%%", settings.overlayOpacity * 100))
+                                .font(.caption.monospaced())
+                                .foregroundStyle(Theme.mute)
+                                .frame(width: 40)
+                        }
+                        Toggle("Auto-show on gaming session / Prep Steam", isOn: $settings.overlayAutoShowOnSession)
+                        Toggle("Auto-hide when no pad and session off", isOn: $settings.overlayAutoHideIdle)
+                        Divider()
+                        Text("Metrics")
+                            .font(.subheadline.weight(.semibold))
+                        Toggle("Controller", isOn: $settings.metricController)
+                        Toggle("CPU", isOn: $settings.metricCPU)
+                        Toggle("Memory", isOn: $settings.metricMemory)
+                        Toggle("GPU (best-effort)", isOn: $settings.metricGPU)
+                        Toggle("Panel Hz (not game FPS)", isOn: $settings.metricPanel)
+                        Toggle("Frontmost Game CPU %", isOn: $settings.metricGameCPU)
+                        Toggle("Ping", isOn: $settings.metricPing)
+                        Toggle("Mapping state", isOn: $settings.metricMapping)
+                        Toggle("Keep-awake", isOn: $settings.metricAwake)
+                        Divider()
+                        Toggle("Ping enabled", isOn: $settings.pingEnabled)
+                        HStack {
+                            Text("Ping host")
+                            TextField("1.1.1.1", text: $settings.pingHost)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(maxWidth: 220)
+                        }
+                        Text("Panel shows display refresh — never invents FPS for other apps. GPU uses IOKit when available.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                        Text("Hotkey: ⌃⌥⌘P toggles overlay · right-click bar for mode/position.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                    }
+                }
+
+                Card {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Audio cues")
                             .font(.headline)
@@ -152,7 +204,7 @@ struct SettingsPage: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Keyboard shortcuts")
                             .font(.headline)
-                        Text("⌘1–⌘8 tabs · ⌘R Rediscover · ⌥⌘M Pause Mapping · ⌘⌥1–3 profiles")
+                        Text("⌘1–⌘8 tabs · ⌘R Rediscover · ⌥⌘M Pause Mapping · ⌃⌥⌘P Overlay · ⌘⌥1–3 profiles")
                             .font(.callout)
                             .foregroundStyle(Theme.mute)
                     }

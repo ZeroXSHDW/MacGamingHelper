@@ -9,7 +9,7 @@ enum SelfTest {
             if !ok { failed = true }
         }
 
-        check("theme-version", Theme.version.hasPrefix("3.2"), Theme.version)
+        check("theme-version", Theme.version.hasPrefix("3.3"), Theme.version)
         check(
             "nav-pages",
             NavPage.allCases.map(\.rawValue) == ["play", "controller", "tester", "mapping", "launchers", "setup", "settings", "help"],
@@ -84,6 +84,31 @@ enum SelfTest {
         check("art", PairingCoach.artNames.filter { BundleArt.nsImage($0) != nil }.count >= 6, "arts")
         check("version-gt", UpdateChecker.isVersion("3.2.0", newerThan: "3.1.0"), "3.2>3.1")
         check("extras-gamebay", LauncherShelf.extraCatalog.contains { $0.id == "gamebay" }, "preserved")
+
+        // Overlay / metrics
+        check("overlay-modes", OverlayMode.allCases.count == 2, "\(OverlayMode.allCases.count)")
+        check("overlay-edges", OverlayEdge.allCases.count == 2, "\(OverlayEdge.allCases.count)")
+        let sample = PerfSampler.shared.sampleOnce()
+        // First CPU sample may be nil (needs delta); second should be finite
+        let sample2 = PerfSampler.shared.sampleOnce()
+        if let cpu = sample2.cpuPercent {
+            check("cpu-finite", cpu.isFinite && cpu >= 0 && cpu <= 100, String(format: "%.1f", cpu))
+        } else {
+            check("cpu-finite", sample.cpuPercent == nil, "first-delta-ok")
+        }
+        if let mem = sample2.memoryPressurePercent {
+            check("mem-finite", mem.isFinite && mem >= 0 && mem <= 100, String(format: "%.1f", mem))
+        } else {
+            check("mem-finite", false, "nil")
+        }
+        check("panel-hz", sample2.panelHz != nil && (sample2.panelHz ?? 0) > 0, "\(sample2.panelHz ?? -1)")
+        // GPU: real or honest unavailable — never fake
+        if sample2.gpuAvailable {
+            check("gpu-real", sample2.gpuPercent != nil && (sample2.gpuPercent ?? -1).isFinite, sample2.gpuNote)
+        } else {
+            check("gpu-honest", sample2.gpuPercent == nil, sample2.gpuNote)
+        }
+        check("version-gt-32", UpdateChecker.isVersion("3.3.0", newerThan: "3.2.0"), "3.3>3.2")
 
         print(failed ? "self-test failed" : "self-test ok")
         return failed ? 1 : 0

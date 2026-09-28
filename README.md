@@ -15,6 +15,13 @@ This project **continues and improves** the local predecessor Game Bay (`~/Proje
 - Game Bay is **not deleted**. Keep using it for Coach / library features if you like.
 - Mac Gaming Helper keeps the launcher hub (Steam, Heroic, GeForce NOW) and replaces the thin controller page with a DualShock 4–first desk: multi-pad selection, live diagram, stylized pad art, light bar, haptics test, pairing coach, and optional keyboard/mouse mapping.
 
+## Gaming Overlay (3.3)
+
+- Always-on-top **Performance Bar** or Compact HUD while gaming
+- Live CPU / Memory / GPU (when IOKit allows) / Ping / Panel Hz / pad battery / mapping
+- Does **not** fake game FPS — shows display refresh as Panel Hz
+- Toggle: Settings, menu bar, or ⌃⌥⌘P
+
 ## Gaming (3.2)
 
 - **Input Test** tab to verify every DualShock control before a match

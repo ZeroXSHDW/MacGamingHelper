@@ -23,7 +23,7 @@ final class MenuBarController: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refreshTitle()
-                PlayHUDController.shared.refresh()
+                GamingOverlayController.shared.refresh()
             }
         }
     }
@@ -83,8 +83,12 @@ final class MenuBarController: ObservableObject {
         add("Rediscover Controllers", #selector(rediscover))
         menu.addItem(.separator())
         add("Prep Steam session", #selector(prepSteam))
-        let hudTitle = (settings?.showPlayHUD == true) ? "Hide Play HUD" : "Show Play HUD"
-        add(hudTitle, #selector(toggleHUD))
+        let ov = settings?.showOverlay == true
+        let mode = settings?.overlayMode == .performance ? "Performance Bar" : "Compact HUD"
+        add(ov ? "Hide Overlay (\(mode))" : "Show Performance Bar", #selector(toggleHUD))
+        if ov {
+            add(settings?.overlayMode == .performance ? "Switch to Compact HUD" : "Switch to Performance Bar", #selector(toggleMode))
+        }
         add("Pause / Resume Mapping", #selector(toggleMapping))
         menu.addItem(.separator())
         add("Quit", #selector(quitApp), "q")
@@ -111,7 +115,11 @@ final class MenuBarController: ObservableObject {
         }
     }
     @objc private func toggleHUD() {
-        PlayHUDController.shared.toggle()
+        GamingOverlayController.shared.toggle()
+        rebuildMenu()
+    }
+    @objc private func toggleMode() {
+        GamingOverlayController.shared.toggleMode()
         rebuildMenu()
     }
     @objc private func toggleMapping() { mapper?.togglePauseHotkey() }
