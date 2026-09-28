@@ -1,5 +1,7 @@
 # Mac Gaming Helper
 
+**Private repository.** Owner: [ZeroXSHDW](https://github.com/ZeroXSHDW).
+
 ## Standalone — no assistant required
 
 This repo and the app on this Mac are complete. You do **not** need any chat bot to run, rebuild, or update Mac Gaming Helper.
