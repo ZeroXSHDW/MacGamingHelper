@@ -12,8 +12,13 @@ final class InputMapper: ObservableObject {
     @Published var accessibilityTrusted = false
     @Published var lastAction: String = "Mapping idle"
     @Published var stickThreshold: Double = 0.35
+    /// True while actively posting CGEvents this frame.
+    @Published var isLive = false
+    /// User-paused via hotkey; distinct from enabled=false.
+    @Published var pausedByUser = false
 
     private weak var monitor: ControllerMonitor?
+    private var appObservers: [NSObjectProtocol] = []
     private weak var settings: AppSettings?
     private var cancellable: AnyCancellable?
     private var heldKeys = Set<UInt16>()
@@ -35,6 +40,40 @@ final class InputMapper: ObservableObject {
             .sink { [weak self] _ in
                 self?.tick()
             }
+        installAppActivityObservers()
+    }
+
+    private func installAppActivityObservers() {
+        guard appObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        appObservers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.settings?.pauseMappingWhenInactive == true else { return }
+                if self.enabled && !self.pausedByUser {
+                    self.pausedByUser = true
+                    self.releaseAll()
+                    self.isLive = false
+                    self.lastAction = "Auto-paused — app inactive (⌥⌘M to resume)"
+                }
+            }
+        })
+    }
+
+    func togglePauseHotkey() {
+        if !enabled {
+            _ = enableIfTrusted()
+            pausedByUser = false
+            lastAction = "Mapping on"
+            return
+        }
+        pausedByUser.toggle()
+        if pausedByUser {
+            releaseAll()
+            isLive = false
+            lastAction = "Paused (⌥⌘M)"
+        } else {
+            lastAction = "Resumed (⌥⌘M)"
+        }
     }
 
     func reloadProfiles() {
@@ -133,12 +172,19 @@ final class InputMapper: ObservableObject {
     private func tick() {
         guard enabled else {
             releaseAll()
+            isLive = false
             lastTouchpadX = nil
             lastTouchpadY = nil
             return
         }
+        if pausedByUser {
+            releaseAll()
+            isLive = false
+            return
+        }
         guard accessibilityTrusted else {
             lastAction = "Enable Accessibility for Mac Gaming Helper to map keys/mouse."
+            isLive = false
             return
         }
         guard let snap = monitor?.selected, snap.connected else {
@@ -220,13 +266,15 @@ final class InputMapper: ObservableObject {
         }
         heldMouse = wantMouse
 
+        let live = !wantKeys.isEmpty || !wantMouse.isEmpty || abs(mouseDX) > 0.01 || abs(mouseDY) > 0.01
+        isLive = live
         if abs(mouseDX) > 0.01 || abs(mouseDY) > 0.01 {
             postMouseMove(dx: mouseDX, dy: mouseDY)
-            lastAction = String(format: "Mouse Δ %.1f, %.1f · keys %d", mouseDX, mouseDY, wantKeys.count)
+            lastAction = String(format: "LIVE mouse Δ %.1f, %.1f · keys %d", mouseDX, mouseDY, wantKeys.count)
         } else if !wantKeys.isEmpty || !wantMouse.isEmpty {
-            lastAction = "Active: \(snap.buttons.joined(separator: " "))"
+            lastAction = "LIVE: \(snap.buttons.joined(separator: " "))"
         } else {
-            lastAction = "Mapping on — waiting for input"
+            lastAction = "Mapping armed — waiting for input"
         }
     }
 
@@ -306,6 +354,8 @@ final class InputMapper: ObservableObject {
 
     func stop() {
         enabled = false
+        pausedByUser = false
+        isLive = false
         releaseAll()
         lastAction = "Mapping off"
     }

@@ -24,6 +24,7 @@ This project **continues and improves** the local predecessor Game Bay (`~/Proje
 - Battery, light-bar tint (when exposed), haptic pulse
 - **Pairing / Setup** coach: Bluetooth Share+PS, **USB-first** rescue, reset pinhole, Steam Big Picture vs Mapping, permissions
 - Optional **keyboard / mouse mapping** profiles (FPS WASD, Arrows) for non-gamepad titles
+- **v3:** sidebar sections, LIVE mapping pause (⌥⌘M), diagnostics export, motion honesty, Steam Big Picture safety
 - **Menu bar** status, Settings (login item, deadzones, updates), custom mapping profiles, low-battery alerts
 - Offline self-test: `MacGamingHelper --self-test`
 - Offline — no accounts required for controller status or mapping
@@ -116,6 +117,10 @@ docs/screenshots/   # README images
 - **Light bar / haptics**: depend on what Game Controller exposes for that firmware / connection mode.
 - **Artwork**: stylized / abstract silhouettes — not photo-realistic trademark replicas.
 - **Sandbox**: entitlements disable App Sandbox so Bluetooth + CGEvent mapping work; this is intentional for a local helper.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for 3.0.0 release notes.
 
 ## License
 

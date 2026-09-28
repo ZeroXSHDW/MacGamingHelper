@@ -33,14 +33,25 @@ struct MappingPage: View {
 
                 Card {
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle("Enable mapping", isOn: Binding(
-                            get: { mapper.enabled },
-                            set: { on in
-                                if on { _ = mapper.enableIfTrusted() } else { mapper.stop() }
+                        HStack {
+                            Toggle("Enable mapping", isOn: Binding(
+                                get: { mapper.enabled },
+                                set: { on in
+                                    if on { _ = mapper.enableIfTrusted() } else { mapper.stop() }
+                                }
+                            ))
+                            .toggleStyle(.switch)
+                            .accessibilityLabel("Enable keyboard and mouse mapping")
+                            Spacer()
+                            if mapper.enabled {
+                                if mapper.isLive { LiveBadge() }
+                                else if mapper.pausedByUser { StatusChip(text: "PAUSED", color: Theme.warn) }
+                                else { StatusChip(text: "ARMED", color: Theme.accent) }
                             }
-                        ))
-                        .toggleStyle(.switch)
-
+                        }
+                        Text("⌥⌘M pauses or resumes mapping. Optional auto-pause when the app is inactive (Settings).")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
                         Toggle("Touchpad → mouse (click + move)", isOn: $settings.touchpadAsMouse)
 
                         HStack {

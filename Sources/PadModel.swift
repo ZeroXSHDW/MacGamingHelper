@@ -62,6 +62,15 @@ struct ControllerSnapshot: Identifiable, Equatable {
     var hapticsSupported: Bool
     var playerIndex: Int
     var transport: PadTransport
+    var preferenceKey: String
+    var motionAvailable: Bool
+    var motionNote: String
+    var gravityX: Double
+    var gravityY: Double
+    var gravityZ: Double
+    var pitch: Double
+    var yaw: Double
+    var roll: Double
 
     var transportLabel: String { transport.rawValue }
 
@@ -83,7 +92,12 @@ struct ControllerSnapshot: Identifiable, Equatable {
         lightBarSupported: false,
         hapticsSupported: false,
         playerIndex: -1,
-        transport: .unknown
+        transport: .unknown,
+        preferenceKey: "",
+        motionAvailable: false,
+        motionNote: "No controller",
+        gravityX: 0, gravityY: 0, gravityZ: 0,
+        pitch: 0, yaw: 0, roll: 0
     )
 }
 

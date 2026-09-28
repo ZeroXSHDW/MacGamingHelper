@@ -30,7 +30,8 @@ struct MacGamingHelperApp: App {
                 .environmentObject(mapper)
                 .environmentObject(launchers)
                 .environmentObject(settings)
-                .frame(minWidth: 920, minHeight: 640)
+                .frame(minWidth: settings.focusModeController ? 720 : 960,
+                       minHeight: settings.focusModeController ? 560 : 640)
                 .onAppear {
                     monitor.attach(settings: settings)
                     monitor.start()
@@ -45,7 +46,7 @@ struct MacGamingHelperApp: App {
                     }
                 }
         }
-        .defaultSize(width: 1100, height: 720)
+        .defaultSize(width: 1120, height: 740)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandMenu("Go") {
@@ -60,6 +61,10 @@ struct MacGamingHelperApp: App {
                     NotificationCenter.default.post(name: .mghRediscover, object: nil)
                 }
                 .keyboardShortcut("r", modifiers: .command)
+                Button("Pause / Resume Mapping") {
+                    NotificationCenter.default.post(name: .mghToggleMappingPause, object: nil)
+                }
+                .keyboardShortcut("m", modifiers: [.command, .option])
             }
         }
     }
@@ -68,4 +73,5 @@ struct MacGamingHelperApp: App {
 extension Notification.Name {
     static let mghGoPage = Notification.Name("mghGoPage")
     static let mghRediscover = Notification.Name("mghRediscover")
+    static let mghToggleMappingPause = Notification.Name("mghToggleMappingPause")
 }

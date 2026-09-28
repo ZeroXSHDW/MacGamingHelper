@@ -4,31 +4,68 @@ struct ControllerPage: View {
     @EnvironmentObject private var monitor: ControllerMonitor
     @EnvironmentObject private var launchers: LauncherShelf
     @EnvironmentObject private var settings: AppSettings
+    @State private var showDetails = false
+    @State private var calibrationNote = ""
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 18) {
                 header
-                HeroPadArt(connected: monitor.selected.connected, maxHeight: 210)
+                statusChips
+                HeroPadArt(connected: monitor.selected.connected, maxHeight: settings.focusModeController ? 160 : 200)
                     .frame(maxWidth: .infinity)
+                    .scaleEffect(monitor.connectPulse ? 1.02 : 1.0)
+                    .animation(.spring(response: 0.4, dampingFraction: 0.7), value: monitor.connectPulse)
+                    .accessibilityLabel(monitor.selected.connected
+                        ? "Controller hero art, connected"
+                        : "Controller hero art, waiting for DualShock")
                 if !monitor.snapshots.isEmpty {
                     picker
                 }
                 if monitor.selected.connected {
                     DualShockDiagram(snap: monitor.selected)
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                }
-                readouts
-                if monitor.selected.connected {
-                    lightAndHaptics
+                        .accessibilityLabel("Live DualShock layout diagram")
                     deadzoneCard
+                    DisclosureGroup(isExpanded: $showDetails) {
+                        readouts
+                        lightAndHaptics
+                        motionCard
+                        calibrationCard
+                    } label: {
+                        Text("Details — axes, light bar, haptics, motion")
+                            .font(.headline)
+                    }
+                    .padding(.vertical, 4)
+                } else {
+                    readouts
                 }
                 tips
             }
             .padding(28)
-            .animation(.easeInOut(duration: 0.3), value: monitor.selected.connected)
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: monitor.selected.connected)
         }
         .background(Theme.heroGradient.opacity(0.35))
+    }
+
+    private var statusChips: some View {
+        let s = monitor.selected
+        return HStack(spacing: 8) {
+            if s.connected {
+                StatusChip(text: s.transportLabel, color: s.transport == .usb ? Theme.good : Theme.ds4Blue)
+                if s.playerIndex >= 0 {
+                    StatusChip(text: "P\(s.playerIndex + 1)", color: Theme.accent)
+                }
+                StatusChip(text: s.battery.isEmpty ? "Battery n/a" : s.battery, color: Theme.mute)
+                if s.motionAvailable {
+                    StatusChip(text: "Motion", color: Theme.good)
+                }
+            } else {
+                StatusChip(text: "Waiting", color: Theme.warn)
+            }
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var header: some View {
@@ -66,15 +103,21 @@ struct ControllerPage: View {
                     .font(.headline)
                 ForEach(monitor.snapshots) { snap in
                     Button {
-                        monitor.selectedID = snap.id
+                        monitor.selectPad(snap)
                     } label: {
                         HStack {
                             Image(systemName: snap.kind.isPlayStation ? "gamecontroller.fill" : "gamecontroller")
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(snap.title).font(.callout.weight(.semibold))
-                                Text("\(snap.category) · \(snap.battery)")
-                                    .font(.caption)
-                                    .foregroundStyle(Theme.mute)
+                                HStack(spacing: 6) {
+                                    StatusChip(text: snap.transportLabel, color: snap.transport == .usb ? Theme.good : Theme.ds4Blue)
+                                    if snap.playerIndex >= 0 {
+                                        StatusChip(text: "P\(snap.playerIndex + 1)")
+                                    }
+                                    Text(snap.battery)
+                                        .font(.caption)
+                                        .foregroundStyle(Theme.mute)
+                                }
                             }
                             Spacer()
                             if snap.id == monitor.selected.id {
@@ -82,6 +125,7 @@ struct ControllerPage: View {
                                     .foregroundStyle(Theme.accent)
                             }
                         }
+                        .accessibilityLabel("\(snap.kind.rawValue), \(snap.transportLabel), \(snap.battery)")
                         .padding(8)
                         .background(
                             snap.id == monitor.selected.id
@@ -217,6 +261,49 @@ struct ControllerPage: View {
                             .font(.caption2)
                             .foregroundStyle(Theme.mute)
                     }
+                }
+            }
+        }
+    }
+
+    private var motionCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Motion / gyro")
+                    .font(.headline)
+                Text(monitor.selected.motionNote)
+                    .font(.callout)
+                    .foregroundStyle(Theme.mute)
+                    .fixedSize(horizontal: false, vertical: true)
+                if monitor.selected.motionAvailable {
+                    Text(String(format: "Gravity  x %+.2f  y %+.2f  z %+.2f", monitor.selected.gravityX, monitor.selected.gravityY, monitor.selected.gravityZ))
+                        .font(.caption.monospaced())
+                    Text(String(format: "Tilt     pitch %+.2f  roll %+.2f  (yaw not synthesized)", monitor.selected.pitch, monitor.selected.roll))
+                        .font(.caption.monospaced())
+                }
+            }
+        }
+        .accessibilityLabel("Motion and gyro readout")
+    }
+
+    private var calibrationCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Stick calibration")
+                    .font(.headline)
+                Text("Rest both sticks, then sample. Suggests a deadzone from center drift.")
+                    .font(.caption)
+                    .foregroundStyle(Theme.mute)
+                HStack {
+                    PillButton(title: "Sample center → suggest deadzone", primary: true) {
+                        let suggested = monitor.suggestDeadzoneFromCenter()
+                        settings.stickDeadzone = suggested
+                        calibrationNote = String(format: "Suggested deadzone %.2f (applied)", suggested)
+                    }
+                    .accessibilityLabel("Sample stick center and suggest deadzone")
+                }
+                if !calibrationNote.isEmpty {
+                    Text(calibrationNote).font(.caption).foregroundStyle(Theme.good)
                 }
             }
         }

@@ -27,12 +27,23 @@ final class ControllerMonitor: ObservableObject {
     @Published var discovering = false
     @Published var lowBatteryBanner: String?
     @Published var lastHapticNote: String = ""
+    @Published var lastRediscoverAt: Date?
+    @Published var connectPulse = false
 
     private var timer: Timer?
     private var started = false
     private var observers: [NSObjectProtocol] = []
     private var lowBatteryAnnouncedIDs = Set<String>()
     private weak var settings: AppSettings?
+    private var preferredStableKey: String?
+
+    var lastRediscoverDescription: String {
+        guard let d = lastRediscoverAt else { return "never" }
+        let f = DateFormatter()
+        f.dateStyle = .short
+        f.timeStyle = .medium
+        return f.string(from: d)
+    }
 
     var selected: ControllerSnapshot {
         if let id = selectedID, let hit = snapshots.first(where: { $0.id == id }) {
@@ -66,6 +77,7 @@ final class ControllerMonitor: ObservableObject {
 
     func rediscover() {
         discovering = true
+        lastRediscoverAt = Date()
         statusLine = "Scanning Bluetooth / USB for DualShock 4 and other pads…"
         GCController.stopWirelessControllerDiscovery()
         GCController.startWirelessControllerDiscovery { [weak self] in
@@ -156,13 +168,14 @@ final class ControllerMonitor: ObservableObject {
                 next.append(snap)
             }
         }
+        let wasEmpty = snapshots.isEmpty
         snapshots = next
-        if let selectedID, !next.contains(where: { $0.id == selectedID }) {
-            self.selectedID = next.first?.id
-        } else if selectedID == nil {
-            self.selectedID = next.first(where: { $0.kind == .dualShock4 })?.id
-                ?? next.first(where: { $0.kind == .dualSense })?.id
-                ?? next.first?.id
+        resolveSelection(in: next)
+        if wasEmpty && !next.isEmpty {
+            connectPulse = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                self?.connectPulse = false
+            }
         }
         evaluateLowBattery(in: next)
         if let reason {
@@ -176,6 +189,47 @@ final class ControllerMonitor: ObservableObject {
             statusLine = "Waiting for a DualShock 4… If lights flash but nothing lists, use USB first (Pairing / Setup)."
         }
         MenuBarController.shared.refreshTitle()
+    }
+
+    private func resolveSelection(in next: [ControllerSnapshot]) {
+        // Keep current id if still present.
+        if let selectedID, next.contains(where: { $0.id == selectedID }) {
+            if let hit = next.first(where: { $0.id == selectedID }) {
+                preferredStableKey = hit.preferenceKey
+                settings?.preferredPadKey = hit.preferenceKey
+            }
+            return
+        }
+        // Reconnect recovery: same vendor|category preference key.
+        let preferred = preferredStableKey?.isEmpty == false ? preferredStableKey : settings?.preferredPadKey
+        if let preferred, !preferred.isEmpty,
+           let hit = next.first(where: { $0.preferenceKey == preferred }) {
+            selectedID = hit.id
+            return
+        }
+        selectedID = next.first(where: { $0.kind == .dualShock4 })?.id
+            ?? next.first(where: { $0.kind == .dualSense })?.id
+            ?? next.first?.id
+        if let id = selectedID, let hit = next.first(where: { $0.id == id }) {
+            preferredStableKey = hit.preferenceKey
+            settings?.preferredPadKey = hit.preferenceKey
+        }
+    }
+
+    func selectPad(_ snap: ControllerSnapshot) {
+        selectedID = snap.id
+        preferredStableKey = snap.preferenceKey
+        settings?.preferredPadKey = snap.preferenceKey
+    }
+
+    /// Sample sticks at rest and suggest a deadzone (stretch calibration).
+    func suggestDeadzoneFromCenter(samples: Int = 20) -> Double {
+        guard selected.connected else { return settings?.stickDeadzone ?? 0.12 }
+        var peak: Double = 0
+        // Use current reading as a single-frame sample helper; caller may average.
+        peak = max(abs(selected.lx), abs(selected.ly), abs(selected.rx), abs(selected.ry))
+        let suggested = min(0.40, max(0.06, peak + 0.04))
+        return suggested
     }
 
     private func evaluateLowBattery(in snaps: [ControllerSnapshot]) {
@@ -270,6 +324,8 @@ final class ControllerMonitor: ObservableObject {
 
         let (batText, batPct, charging) = batteryInfo(controller)
         let transport: PadTransport = controller.isAttachedToDevice ? .usb : .bluetooth
+        let pref = "\(vendor)|\(category)|\(kind.rawValue)"
+        let motion = readMotion(controller)
 
         return ControllerSnapshot(
             id: stableID(for: controller),
@@ -295,8 +351,37 @@ final class ControllerMonitor: ObservableObject {
             lightBarSupported: controller.light != nil,
             hapticsSupported: controller.haptics != nil,
             playerIndex: controller.playerIndex.rawValue,
-            transport: transport
+            transport: transport,
+            preferenceKey: pref,
+            motionAvailable: motion.available,
+            motionNote: motion.note,
+            gravityX: motion.gx, gravityY: motion.gy, gravityZ: motion.gz,
+            pitch: motion.pitch, yaw: motion.yaw, roll: motion.roll
         )
+    }
+
+    private func readMotion(_ controller: GCController) -> (available: Bool, note: String, gx: Double, gy: Double, gz: Double, pitch: Double, yaw: Double, roll: Double) {
+        guard let motion = controller.motion else {
+            return (false, "Motion / gyro not exposed by Game Controller for this pad on macOS.", 0, 0, 0, 0, 0, 0)
+        }
+        if motion.valueChangedHandler == nil {
+            motion.valueChangedHandler = { _ in }
+        }
+        let g = motion.gravity
+        let attitudeOK = motion.hasAttitude || motion.hasRotationRate
+        if !attitudeOK && abs(g.x) < 0.001 && abs(g.y) < 0.001 && abs(g.z) < 0.001 {
+            return (false, "GCMotion present but attitude/rotation not available for this DualShock connection.", 0, 0, 0, 0, 0, 0)
+        }
+        var pitch = 0.0, yaw = 0.0, roll = 0.0
+        if attitudeOK || abs(g.x) + abs(g.y) + abs(g.z) > 0.05 {
+            pitch = atan2(g.y, max(0.0001, g.z))
+            roll = atan2(-g.x, sqrt(g.y * g.y + g.z * g.z))
+            yaw = 0
+        }
+        let note = attitudeOK
+            ? "Motion exposed (gravity + attitude flags). Yaw not synthesized."
+            : "Gravity vector readable — full gyro attitude not flagged for this pad."
+        return (true, note, Double(g.x), Double(g.y), Double(g.z), pitch, yaw, roll)
     }
 
     private func classify(vendor: String, category: String, pad: GCExtendedGamepad) -> PadKind {

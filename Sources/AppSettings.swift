@@ -22,6 +22,10 @@ final class AppSettings: ObservableObject {
         static let lowBatteryAlerts = "settings.lowBatteryAlerts"
         static let didWelcome = "settings.didWelcome"
         static let activeProfileID = "settings.activeProfileID"
+        static let lastTab = "settings.lastTab"
+        static let pauseMappingInactive = "settings.pauseMappingInactive"
+        static let focusMode = "settings.focusMode"
+        static let preferredPadKey = "settings.preferredPadKey"
     }
 
     @Published var showMenuBar: Bool {
@@ -57,6 +61,18 @@ final class AppSettings: ObservableObject {
     @Published var activeProfileID: String {
         didSet { d.set(activeProfileID, forKey: Key.activeProfileID) }
     }
+    @Published var lastTab: String {
+        didSet { d.set(lastTab, forKey: Key.lastTab) }
+    }
+    @Published var pauseMappingWhenInactive: Bool {
+        didSet { d.set(pauseMappingWhenInactive, forKey: Key.pauseMappingInactive) }
+    }
+    @Published var focusModeController: Bool {
+        didSet { d.set(focusModeController, forKey: Key.focusMode) }
+    }
+    @Published var preferredPadKey: String {
+        didSet { d.set(preferredPadKey, forKey: Key.preferredPadKey) }
+    }
     @Published var launchAtLoginEnabled: Bool = false
     @Published var launchAtLoginNote: String = ""
 
@@ -72,6 +88,10 @@ final class AppSettings: ObservableObject {
         lowBatteryAlerts = d.object(forKey: Key.lowBatteryAlerts) as? Bool ?? true
         didShowWelcome = d.bool(forKey: Key.didWelcome)
         activeProfileID = d.string(forKey: Key.activeProfileID) ?? MappingProfile.fpsWASD.id
+        lastTab = d.string(forKey: Key.lastTab) ?? NavPage.controller.rawValue
+        pauseMappingWhenInactive = d.object(forKey: Key.pauseMappingInactive) as? Bool ?? true
+        focusModeController = d.bool(forKey: Key.focusMode)
+        preferredPadKey = d.string(forKey: Key.preferredPadKey) ?? ""
         refreshLoginItemState()
     }
 

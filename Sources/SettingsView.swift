@@ -28,6 +28,8 @@ struct SettingsPage: View {
                         Toggle("Start minimized to menu bar", isOn: $settings.startMinimizedToMenuBar)
                         Toggle("Open Pairing coach when no pad is connected", isOn: $settings.openPairingOnEmpty)
                         Toggle("Low-battery alerts (≤20%)", isOn: $settings.lowBatteryAlerts)
+                        Toggle("Auto-pause Mapping when app is inactive", isOn: $settings.pauseMappingWhenInactive)
+                        Toggle("Focus mode (Controller-first)", isOn: $settings.focusModeController)
 
                         Divider()
                         Toggle("Launch at login", isOn: Binding(
@@ -109,10 +111,31 @@ struct SettingsPage: View {
                 }
 
                 Card {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Diagnostics")
+                            .font(.headline)
+                        Text("Copyable support dump: OS, app version, pads, permissions, last rediscover.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                        HStack {
+                            PillButton(title: "Copy diagnostics", primary: true) {
+                                let text = Diagnostics.dump(monitor: monitor, mapper: mapper, settings: settings)
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(text, forType: .string)
+                            }
+                            PillButton(title: "Export to Desktop") {
+                                _ = Diagnostics.exportToDesktop(monitor: monitor, mapper: mapper, settings: settings)
+                            }
+                        }
+                        .accessibilityLabel("Copy or export diagnostics")
+                    }
+                }
+
+                Card {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Keyboard shortcuts")
                             .font(.headline)
-                        Text("⌘1 Controller · ⌘2 Mapping · ⌘3 Launchers · ⌘4 Pairing · ⌘5 Settings · ⌘6 Help · ⌘R Rediscover")
+                        Text("⌘1–⌘6 tabs · ⌘R Rediscover · ⌥⌘M Pause/Resume Mapping")
                             .font(.callout)
                             .foregroundStyle(Theme.mute)
                     }

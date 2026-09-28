@@ -1,7 +1,9 @@
+import AppKit
 import SwiftUI
 
 struct LaunchersPage: View {
     @EnvironmentObject private var launchers: LauncherShelf
+    @EnvironmentObject private var mapper: InputMapper
 
     var body: some View {
         ScrollView {
@@ -75,8 +77,37 @@ struct LaunchersPage: View {
                         HStack {
                             PillButton(title: "Open", primary: primary) { launchers.open(item) }
                             if item.id == "steam" {
-                                PillButton(title: "Big Picture") { launchers.openSteamBigPicture() }
+                                PillButton(title: "Open + Big Picture", primary: true) {
+                                    if mapper.enabled {
+                                        mapper.stop()
+                                    }
+                                    launchers.openSteamBigPicture()
+                                }
+                                .accessibilityLabel("Open Steam Big Picture and turn mapping off")
                             }
+                            if item.id == "heroic" {
+                                PillButton(title: "Open + tip") {
+                                    launchers.open(item)
+                                }
+                            }
+                            if item.id == "geforce" {
+                                PillButton(title: "Open + tip") { launchers.open(item) }
+                            }
+                        }
+                        if item.id == "steam" {
+                            Text("Tip: Use Steam Input in Big Picture. Mapping is turned off when you launch Big Picture from here so keys are not double-fired.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.warn)
+                        }
+                        if item.id == "heroic" {
+                            Text("Tip: Install a Wine / GPTK runner in Heroic before Windows builds. Prefer native pad first; Mapping only if the game ignores gamepads.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.mute)
+                        }
+                        if item.id == "geforce" {
+                            Text("Tip: Cloud play for titles blocked by anti-cheat on Mac. DualShock 4 usually works once GFN sees the pad.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.mute)
                         }
                     }
                 }
@@ -86,6 +117,11 @@ struct LaunchersPage: View {
 }
 
 struct HelpPage: View {
+    @EnvironmentObject private var monitor: ControllerMonitor
+    @EnvironmentObject private var mapper: InputMapper
+    @EnvironmentObject private var settings: AppSettings
+    @State private var diagPreview = ""
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
@@ -151,6 +187,35 @@ struct HelpPage: View {
                         Text("No account sign-in is required for controller status or local mapping.")
                     }
                     .font(.callout)
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Diagnostics")
+                            .font(.headline)
+                        Text("Export a support dump for troubleshooting DualShock pairing or mapping.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                        HStack {
+                            PillButton(title: "Copy diagnostics", primary: true) {
+                                let text = Diagnostics.dump(monitor: monitor, mapper: mapper, settings: settings)
+                                diagPreview = String(text.prefix(400)) + "…"
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(text, forType: .string)
+                            }
+                            PillButton(title: "Export to Desktop") {
+                                if let url = Diagnostics.exportToDesktop(monitor: monitor, mapper: mapper, settings: settings) {
+                                    diagPreview = "Wrote \(url.lastPathComponent)"
+                                }
+                            }
+                        }
+                        if !diagPreview.isEmpty {
+                            Text(diagPreview)
+                                .font(.system(.caption2, design: .monospaced))
+                                .foregroundStyle(Theme.mute)
+                                .textSelection(.enabled)
+                        }
+                    }
                 }
             }
             .padding(28)
