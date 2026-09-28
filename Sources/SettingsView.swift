@@ -26,6 +26,12 @@ struct SettingsPage: View {
                                 MenuBarController.shared.applyVisibility()
                             }
                         Toggle("Play HUD (always-on-top while gaming)", isOn: $settings.showPlayHUD)
+                        Toggle("Gaming session active (prevent display sleep)", isOn: $settings.gamingSessionActive)
+                        if KeepAwake.shared.isAsserting {
+                            Text("Keep-awake assertion is active.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.good)
+                        }
                         Toggle("Start minimized to menu bar", isOn: $settings.startMinimizedToMenuBar)
                         Toggle("Open Pairing coach when no pad is connected", isOn: $settings.openPairingOnEmpty)
                         Toggle("Low-battery alerts (≤20%)", isOn: $settings.lowBatteryAlerts)
@@ -113,6 +119,16 @@ struct SettingsPage: View {
 
                 Card {
                     VStack(alignment: .leading, spacing: 10) {
+                        Text("Audio cues")
+                            .font(.headline)
+                        Toggle("Connect / disconnect sounds", isOn: $settings.audioConnectCues)
+                        Toggle("Low battery sound", isOn: $settings.audioLowBatteryCue)
+                        Toggle("Input tester beeps", isOn: $settings.audioTesterBeeps)
+                    }
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("Diagnostics")
                             .font(.headline)
                         Text("Copyable support dump: OS, app version, pads, permissions, last rediscover.")
@@ -136,7 +152,7 @@ struct SettingsPage: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Keyboard shortcuts")
                             .font(.headline)
-                        Text("⌘1–⌘7 tabs · ⌘R Rediscover · ⌥⌘M Pause Mapping · ⌘⌥1–3 profiles")
+                        Text("⌘1–⌘8 tabs · ⌘R Rediscover · ⌥⌘M Pause Mapping · ⌘⌥1–3 profiles")
                             .font(.callout)
                             .foregroundStyle(Theme.mute)
                     }

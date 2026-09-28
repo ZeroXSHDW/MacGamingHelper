@@ -25,6 +25,7 @@ final class InputMapper: ObservableObject {
     private var heldMouse = Set<Int64>()
     private var lastTouchpadX: Double?
     private var lastTouchpadY: Double?
+    private var macroFired = false
 
     func bind(monitor: ControllerMonitor, settings: AppSettings) {
         self.monitor = monitor
@@ -74,6 +75,11 @@ final class InputMapper: ObservableObject {
         } else {
             lastAction = "Resumed (⌥⌘M)"
         }
+    }
+
+    func updateMacro(_ macro: MappingMacro) {
+        profile.macro = macro
+        objectWillChange.send()
     }
 
     func selectProfileAtIndex(_ index: Int) {
@@ -242,6 +248,23 @@ final class InputMapper: ObservableObject {
                 }
             case .scroll, .none:
                 break
+            }
+        }
+
+        // Simple combo macro: hold + tap → key (one slot)
+        let macro = profile.macro
+        if macro.enabled {
+            let hold = isActive(control: macro.holdControl, snap: snap, deadzone: dz, stickThreshold: thresh, triggerDeadzone: trigDZ)
+            let tap = isActive(control: macro.tapControl, snap: snap, deadzone: dz, stickThreshold: thresh, triggerDeadzone: trigDZ)
+            if hold && tap {
+                if !macroFired {
+                    wantKeys.insert(macro.keyCode)
+                    macroFired = true
+                } else {
+                    wantKeys.insert(macro.keyCode)
+                }
+            } else {
+                macroFired = false
             }
         }
 

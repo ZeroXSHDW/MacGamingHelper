@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct MappingPage: View {
@@ -128,6 +129,66 @@ struct MappingPage: View {
                         Text("Curves reshape right-stick mouse look after deadzone. Expo = fine aim near center.")
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
+                        Text("FPS tip: lower pointer acceleration in System Settings → Mouse / Trackpad for cleaner aim.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.warn)
+                        PillButton(title: "Open Mouse settings") {
+                            let urls = [
+                                "x-apple.systempreferences:com.apple.Mouse-Settings.extension",
+                                "x-apple.systempreferences:com.apple.preference.mouse",
+                            ]
+                            for s in urls {
+                                if let u = URL(string: s), NSWorkspace.shared.open(u) { return }
+                            }
+                        }
+                    }
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Combo macro (one slot)")
+                            .font(.headline)
+                        Toggle("Enable macro", isOn: Binding(
+                            get: { mapper.profile.macro.enabled },
+                            set: { on in
+                                mapper.profile.macro.enabled = on
+                            }
+                        ))
+                        HStack {
+                            Text("Hold")
+                            Picker("", selection: Binding(
+                                get: { mapper.profile.macro.holdControl },
+                                set: { mapper.profile.macro.holdControl = $0 }
+                            )) {
+                                ForEach(["L1", "R1", "L2", "R2"], id: \.self) { Text($0).tag($0) }
+                            }
+                            .frame(width: 80)
+                            Text("+ Tap")
+                            Picker("", selection: Binding(
+                                get: { mapper.profile.macro.tapControl },
+                                set: { mapper.profile.macro.tapControl = $0 }
+                            )) {
+                                ForEach(["Square", "Cross", "Circle", "Triangle", "Share", "Options"], id: \.self) { Text($0).tag($0) }
+                            }
+                            .frame(width: 100)
+                            Text("→")
+                            Picker("", selection: Binding(
+                                get: { mapper.profile.macro.keyCode },
+                                set: { code in
+                                    mapper.profile.macro.keyCode = code
+                                    mapper.profile.macro.keyName = KeyChoices.options.first(where: { $0.code == code })?.name ?? "Key"
+                                }
+                            )) {
+                                ForEach(KeyChoices.options, id: \.code) { Text($0.name).tag($0.code) }
+                            }
+                            .frame(width: 90)
+                        }
+                        Text("Example: hold L1 + Square → E. Save custom profiles to keep the macro.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                        if !ProfileStore.isPreset(mapper.profile.id) {
+                            PillButton(title: "Save profile with macro", primary: true) { mapper.saveCurrentProfile() }
+                        }
                     }
                 }
 

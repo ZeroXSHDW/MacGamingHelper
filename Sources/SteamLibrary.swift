@@ -4,6 +4,8 @@ import Foundation
 struct SteamGame: Identifiable, Hashable, Sendable {
     let appID: String
     let name: String
+    var lastUpdated: Int
+    var sizeOnDisk: Int64
     var id: String { appID }
 }
 
@@ -39,7 +41,9 @@ enum SteamVDF {
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) {
             let parts = quotedStrings(in: String(line))
             if parts.count >= 2, parts[0] == "path" {
-                let raw = parts[1].replacingOccurrences(of: "\\\\", with: "/")
+                let raw = parts[1]
+                    .replacingOccurrences(of: "\\\\", with: "/")
+                    .replacingOccurrences(of: "\\", with: "/")
                 if raw.hasPrefix("/") || raw.hasPrefix("~") { found.append(raw) }
             }
         }
@@ -52,15 +56,51 @@ final class SteamShelf: ObservableObject {
     @Published var games: [SteamGame] = []
     @Published var note: String = ""
     @Published var lastScanOK = false
+    @Published var filter: String = ""
+    @Published var favourites: Set<String> = []
+
+    private let favKey = "steam.favourites"
+
+    init() {
+        if let arr = UserDefaults.standard.array(forKey: favKey) as? [String] {
+            favourites = Set(arr)
+        }
+    }
+
+    var displayed: [SteamGame] {
+        let q = filter.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        var list = games
+        if !q.isEmpty {
+            list = list.filter { $0.name.lowercased().contains(q) || $0.appID.contains(q) }
+        }
+        return list.sorted { a, b in
+            let af = favourites.contains(a.appID)
+            let bf = favourites.contains(b.appID)
+            if af != bf { return af && !bf }
+            if a.lastUpdated != b.lastUpdated { return a.lastUpdated > b.lastUpdated }
+            if a.sizeOnDisk != b.sizeOnDisk { return a.sizeOnDisk > b.sizeOnDisk }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+    }
+
+    func toggleFavourite(_ game: SteamGame) {
+        if favourites.contains(game.appID) {
+            favourites.remove(game.appID)
+        } else {
+            favourites.insert(game.appID)
+        }
+        UserDefaults.standard.set(Array(favourites), forKey: favKey)
+    }
 
     func refresh() {
         let home = URL(fileURLWithPath: NSHomeDirectory())
         let steam = home.appendingPathComponent("Library/Application Support/Steam")
-        var roots = [steam]
+        var roots: [URL] = [steam]
         let vdf = steam.appendingPathComponent("steamapps/libraryfolders.vdf")
         if let text = try? String(contentsOf: vdf, encoding: .utf8) {
             for path in SteamVDF.paths(in: text) {
-                roots.append(URL(fileURLWithPath: (path as NSString).expandingTildeInPath))
+                let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+                if !roots.contains(url) { roots.append(url) }
             }
         }
         var list: [SteamGame] = []
@@ -75,21 +115,23 @@ final class SteamShelf: ObservableObject {
                 guard let name = SteamVDF.value(text, key: "name"), !name.isEmpty else { continue }
                 let appID = SteamVDF.value(text, key: "appid") ?? fileID
                 let flags = Int(SteamVDF.value(text, key: "StateFlags") ?? "") ?? 0
-                guard flags & 4 != 0 else { continue } // installed
+                guard flags & 4 != 0 else { continue }
+                let updated = Int(SteamVDF.value(text, key: "LastUpdated") ?? "0") ?? 0
+                let size = Int64(SteamVDF.value(text, key: "SizeOnDisk") ?? "0") ?? 0
                 if seen.insert(appID).inserted {
-                    list.append(SteamGame(appID: appID, name: name))
+                    list.append(SteamGame(appID: appID, name: name, lastUpdated: updated, sizeOnDisk: size))
                 }
             }
         }
-        list.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         games = list
         lastScanOK = true
+        let rootsNote = roots.count > 1 ? " across \(roots.count) library folders" : ""
         if list.isEmpty {
             note = FileManager.default.fileExists(atPath: steam.path)
-                ? "No installed Steam titles found (or library not readable)."
-                : "Steam library folder not found. Install Steam, then Refresh."
+                ? "No installed Steam titles found\(rootsNote)."
+                : "Steam library folder not found."
         } else {
-            note = "\(list.count) installed Steam title(s)."
+            note = "\(list.count) installed title(s)\(rootsNote)."
         }
     }
 

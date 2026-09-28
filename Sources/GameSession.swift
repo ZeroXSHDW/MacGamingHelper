@@ -89,4 +89,8 @@ final class GameSession: ObservableObject {
         if mapper.enabled { mapper.stop() }
         launchers.openSteamBigPicture()
     }
+
+    static func compatCards() -> [CompatTool] {
+        CompatTools.detect()
+    }
 }

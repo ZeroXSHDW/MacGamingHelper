@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum NavPage: String, CaseIterable, Identifiable, Hashable {
-    case play, controller, mapping, launchers, setup, settings, help
+    case play, controller, tester, mapping, launchers, setup, settings, help
     var id: String { rawValue }
     var title: String {
         switch self {
         case .play: "Play"
         case .controller: "Controller"
+        case .tester: "Input Test"
         case .mapping: "Mapping"
         case .launchers: "Launchers"
         case .setup: "Pairing"
@@ -18,6 +19,7 @@ enum NavPage: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .play: "play.circle.fill"
         case .controller: "gamecontroller.fill"
+        case .tester: "waveform.path.ecg"
         case .mapping: "keyboard"
         case .launchers: "square.stack.3d.up.fill"
         case .setup: "wrench.and.screwdriver.fill"
@@ -29,14 +31,15 @@ enum NavPage: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .play: "1"
         case .controller: "2"
-        case .mapping: "3"
-        case .launchers: "4"
-        case .setup: "5"
-        case .settings: "6"
-        case .help: "7"
+        case .tester: "3"
+        case .mapping: "4"
+        case .launchers: "5"
+        case .setup: "6"
+        case .settings: "7"
+        case .help: "8"
         }
     }
-    static var deskSection: [NavPage] { [.play, .controller, .mapping, .launchers] }
+    static var deskSection: [NavPage] { [.play, .controller, .tester, .mapping, .launchers] }
     static var setupSection: [NavPage] { [.setup, .settings, .help] }
 }
 
@@ -144,6 +147,7 @@ struct RootView: View {
                     switch page {
                     case .play: PlayPage()
                     case .controller: ControllerPage()
+                    case .tester: InputTesterPage()
                     case .mapping: MappingPage()
                     case .launchers: LaunchersPage()
                     case .setup: SetupPage()

@@ -20,6 +20,7 @@ struct MacGamingHelperApp: App {
     @StateObject private var settings = AppSettings.shared
     @StateObject private var steam = SteamShelf()
     @StateObject private var session = GameSession()
+    @StateObject private var heroic = HeroicShelf()
 
     init() {
         _ = NSApplication.shared
@@ -34,6 +35,7 @@ struct MacGamingHelperApp: App {
                 .environmentObject(settings)
                 .environmentObject(steam)
                 .environmentObject(session)
+                .environmentObject(heroic)
                 .frame(minWidth: settings.focusModeController ? 720 : 960,
                        minHeight: settings.focusModeController ? 560 : 640)
                 .onAppear {
@@ -46,6 +48,14 @@ struct MacGamingHelperApp: App {
                     PlayHUDController.shared.bind(monitor: monitor, mapper: mapper, settings: settings)
                     session.start()
                     steam.refresh()
+                    heroic.refresh()
+                    NotificationCenter.default.addObserver(
+                        forName: NSApplication.willTerminateNotification,
+                        object: nil,
+                        queue: .main
+                    ) { _ in
+                        Task { @MainActor in KeepAwake.shared.update(active: false) }
+                    }
                     if settings.startMinimizedToMenuBar {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                             for w in NSApp.windows where !(w is NSPanel) { w.orderOut(nil) }

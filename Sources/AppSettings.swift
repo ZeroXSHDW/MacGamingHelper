@@ -33,6 +33,12 @@ final class AppSettings: ObservableObject {
         static let hairTrigger = "settings.hairTrigger"
         static let hairTriggerThreshold = "settings.hairTriggerThreshold"
         static let gyroAssist = "settings.gyroAssist"
+        static let gamingSessionActive = "settings.gamingSessionActive"
+        static let audioConnect = "settings.audioConnect"
+        static let audioLowBat = "settings.audioLowBat"
+        static let audioTester = "settings.audioTester"
+        static let hudOriginX = "settings.hudOriginX"
+        static let hudOriginY = "settings.hudOriginY"
     }
 
     @Published var showMenuBar: Bool {
@@ -84,6 +90,7 @@ final class AppSettings: ObservableObject {
         didSet {
             d.set(showPlayHUD, forKey: Key.showPlayHUD)
             PlayHUDController.shared.applyVisibility()
+            syncKeepAwake()
         }
     }
     @Published var stickCurve: StickCurve {
@@ -103,6 +110,21 @@ final class AppSettings: ObservableObject {
     }
     @Published var gyroAssistMouse: Bool {
         didSet { d.set(gyroAssistMouse, forKey: Key.gyroAssist) }
+    }
+    @Published var gamingSessionActive: Bool {
+        didSet {
+            d.set(gamingSessionActive, forKey: Key.gamingSessionActive)
+            syncKeepAwake()
+        }
+    }
+    @Published var audioConnectCues: Bool {
+        didSet { d.set(audioConnectCues, forKey: Key.audioConnect) }
+    }
+    @Published var audioLowBatteryCue: Bool {
+        didSet { d.set(audioLowBatteryCue, forKey: Key.audioLowBat) }
+    }
+    @Published var audioTesterBeeps: Bool {
+        didSet { d.set(audioTesterBeeps, forKey: Key.audioTester) }
     }
     @Published var launchAtLoginEnabled: Bool = false
     @Published var launchAtLoginNote: String = ""
@@ -134,7 +156,26 @@ final class AppSettings: ObservableObject {
         hairTrigger = d.object(forKey: Key.hairTrigger) as? Bool ?? true
         hairTriggerThreshold = d.object(forKey: Key.hairTriggerThreshold) as? Double ?? 0.12
         gyroAssistMouse = d.bool(forKey: Key.gyroAssist)
+        gamingSessionActive = d.bool(forKey: Key.gamingSessionActive)
+        audioConnectCues = d.object(forKey: Key.audioConnect) as? Bool ?? true
+        audioLowBatteryCue = d.object(forKey: Key.audioLowBat) as? Bool ?? true
+        audioTesterBeeps = d.bool(forKey: Key.audioTester)
         refreshLoginItemState()
+        syncKeepAwake()
+    }
+
+    func syncKeepAwake() {
+        KeepAwake.shared.update(active: showPlayHUD || gamingSessionActive)
+    }
+
+    func hudOrigin() -> CGPoint? {
+        guard d.object(forKey: Key.hudOriginX) != nil else { return nil }
+        return CGPoint(x: d.double(forKey: Key.hudOriginX), y: d.double(forKey: Key.hudOriginY))
+    }
+
+    func saveHUDOrigin(_ p: CGPoint) {
+        d.set(p.x, forKey: Key.hudOriginX)
+        d.set(p.y, forKey: Key.hudOriginY)
     }
 
     func refreshLoginItemState() {

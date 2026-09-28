@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Compact always-on-top gaming HUD: pad, battery, Mapping LIVE/PAUSED, ⌥⌘M hint.
+/// Compact always-on-top gaming HUD: pad, battery, profile, Mapping LIVE/PAUSED.
 @MainActor
 final class PlayHUDController: ObservableObject {
     static let shared = PlayHUDController()
@@ -11,6 +11,7 @@ final class PlayHUDController: ObservableObject {
     private weak var monitor: ControllerMonitor?
     private weak var mapper: InputMapper?
     private weak var settings: AppSettings?
+    private var moveObserver: NSObjectProtocol?
 
     func bind(monitor: ControllerMonitor, mapper: InputMapper, settings: AppSettings) {
         self.monitor = monitor
@@ -26,6 +27,7 @@ final class PlayHUDController: ObservableObject {
         } else {
             hide()
         }
+        settings.syncKeepAwake()
     }
 
     func toggle() {
@@ -39,7 +41,7 @@ final class PlayHUDController: ObservableObject {
             let view = PlayHUDView(monitor: monitor, mapper: mapper, settings: settings)
             let hosting = NSHostingView(rootView: view)
             let panel = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 280, height: 88),
+                contentRect: NSRect(x: 0, y: 0, width: 300, height: 100),
                 styleMask: [.titled, .closable, .nonactivatingPanel, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
@@ -53,16 +55,25 @@ final class PlayHUDController: ObservableObject {
             panel.isMovableByWindowBackground = true
             panel.hidesOnDeactivate = false
             panel.contentView = hosting
-            panel.center()
-            // Park near top-right of main screen
-            if let screen = NSScreen.main {
+            if let origin = settings.hudOrigin() {
+                panel.setFrameOrigin(origin)
+            } else if let screen = NSScreen.main {
                 let f = screen.visibleFrame
-                panel.setFrameOrigin(NSPoint(x: f.maxX - 300, y: f.maxY - 120))
+                panel.setFrameOrigin(NSPoint(x: f.maxX - 320, y: f.maxY - 130))
+            }
+            moveObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didMoveNotification,
+                object: panel,
+                queue: .main
+            ) { [weak self] note in
+                guard let win = note.object as? NSWindow else { return }
+                Task { @MainActor in
+                    self?.settings?.saveHUDOrigin(win.frame.origin)
+                }
             }
             self.panel = panel
             self.host = hosting
         }
-        // Refresh root view bindings
         host?.rootView = PlayHUDView(monitor: monitor, mapper: mapper, settings: settings)
         panel?.orderFrontRegardless()
     }
@@ -92,11 +103,32 @@ struct PlayHUDView: View {
                     Text(monitor.selected.connected ? monitor.selected.kind.shortLabel : "No pad")
                         .font(.callout.weight(.bold))
                     if let p = monitor.selected.batteryPercent {
-                        Text("\(p)%")
-                            .font(.caption.monospaced().weight(.semibold))
-                            .foregroundStyle(batteryColor(p))
+                        Button {
+                            if !monitor.selected.connected {
+                                NotificationCenter.default.post(name: .mghGoPage, object: NavPage.setup.rawValue)
+                                MenuBarController.shared.openMainWindow()
+                            }
+                        } label: {
+                            Text("\(p)%")
+                                .font(.caption.monospaced().weight(.semibold))
+                                .foregroundStyle(batteryColor(p))
+                        }
+                        .buttonStyle(.plain)
+                        .help(monitor.selected.connected ? "Battery" : "Open Pairing")
+                    } else if !monitor.selected.connected {
+                        Button("Pair…") {
+                            NotificationCenter.default.post(name: .mghGoPage, object: NavPage.setup.rawValue)
+                            MenuBarController.shared.openMainWindow()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.warn)
                     }
                 }
+                Text(mapper.profile.name)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Theme.mute)
+                    .lineLimit(1)
                 HStack(spacing: 6) {
                     if mapper.enabled {
                         if mapper.isLive { LiveBadge() }
@@ -122,11 +154,8 @@ struct PlayHUDView: View {
             .accessibilityLabel("Show main window")
         }
         .padding(12)
-        .frame(width: 268, height: 72)
+        .frame(width: 288, height: 86)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .onAppear {
-            // Keep HUD content fresh via timer in MenuBar / session
-        }
     }
 
     private func batteryColor(_ p: Int) -> Color {

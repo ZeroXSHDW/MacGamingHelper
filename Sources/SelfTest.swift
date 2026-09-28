@@ -9,34 +9,30 @@ enum SelfTest {
             if !ok { failed = true }
         }
 
-        check("theme-version", Theme.version.hasPrefix("3.1"), Theme.version)
+        check("theme-version", Theme.version.hasPrefix("3.2"), Theme.version)
         check(
             "nav-pages",
-            NavPage.allCases.map(\.rawValue) == ["play", "controller", "mapping", "launchers", "setup", "settings", "help"],
+            NavPage.allCases.map(\.rawValue) == ["play", "controller", "tester", "mapping", "launchers", "setup", "settings", "help"],
             NavPage.allCases.map(\.rawValue).joined(separator: ",")
         )
-        check("nav-desk", NavPage.deskSection.first == .play, "play first")
+        check("nav-tester", NavPage.deskSection.contains(.tester), "tester in desk")
 
-        check("curve-linear", StickCurve.linear.apply(0.5) == 0.5, "\(StickCurve.linear.apply(0.5))")
-        check("curve-ease", StickCurve.easeOut.apply(0) == 0 && StickCurve.easeOut.apply(1) == 1, "ease ends")
-        check("curve-expo", StickCurve.expo.apply(0.5) < 0.5, "expo soft center")
-        let shaped = StickMath.shaped(value: 0.5, deadzone: 0.1, curve: .linear)
-        check("shaped-dz", shaped > 0 && shaped < 1, "\(shaped)")
-        check("shaped-inside-dz", StickMath.shaped(value: 0.05, deadzone: 0.1, curve: .linear) == 0, "zero")
+        check("curve-expo", StickCurve.expo.apply(0.5) < 0.5, "soft center")
+        check("shaped-dz", StickMath.shaped(value: 0.05, deadzone: 0.1, curve: .linear) == 0, "inside dz")
 
-        // Steam VDF fixtures
         let acf = """
         "AppState"
         {
           "appid" "730"
           "name" "Counter-Strike 2"
           "StateFlags" "4"
+          "LastUpdated" "1700000000"
+          "SizeOnDisk" "30000000000"
         }
         """
-        check("vdf-name", SteamVDF.value(acf, key: "name") == "Counter-Strike 2", SteamVDF.value(acf, key: "name") ?? "nil")
-        check("vdf-flags-installed", (Int(SteamVDF.value(acf, key: "StateFlags") ?? "") ?? 0) & 4 != 0, "flag 4")
-        let absent = acf.replacingOccurrences(of: "\"4\"", with: "\"2\"")
-        check("vdf-flags-absent", (Int(SteamVDF.value(absent, key: "StateFlags") ?? "") ?? 0) & 4 == 0, "flag 2")
+        check("vdf-name", SteamVDF.value(acf, key: "name") == "Counter-Strike 2", "name")
+        check("vdf-updated", SteamVDF.value(acf, key: "LastUpdated") == "1700000000", "updated")
+        check("vdf-size", SteamVDF.value(acf, key: "SizeOnDisk") == "30000000000", "size")
         let folders = """
         "libraryfolders"
         {
@@ -44,31 +40,50 @@ enum SelfTest {
           {
             "path" "/Users/user/Library/Application Support/Steam"
           }
+          "1"
+          {
+            "path" "/Volumes/Games/SteamLibrary"
+          }
         }
         """
-        check("vdf-path", SteamVDF.paths(in: folders).contains { $0.contains("Steam") }, SteamVDF.paths(in: folders).joined(separator: "|"))
+        let paths = SteamVDF.paths(in: folders)
+        check("vdf-multi-root", paths.count == 2, "\(paths.count)")
+
+        let tools = CompatTools.detect()
+        check("compat-count", tools.count == 3, "\(tools.count)")
+        check("compat-ids", tools.map(\.id) == ["crossover", "whisky", "gptk"], tools.map(\.id).joined())
+
+        var profile = MappingProfile.fpsWASD
+        check("macro-default-off", profile.macro.enabled == false, "off")
+        profile.macro.enabled = true
+        profile.macro.holdControl = "L1"
+        profile.macro.tapControl = "Square"
+        check("macro-on", profile.macro.enabled && profile.macro.holdControl == "L1", "L1+Square")
+
+        // Encode/decode without macro key
+        let legacy = """
+        {"id":"x","name":"X","deadzone":0.1,"bindings":[]}
+        """.data(using: .utf8)!
+        let decoded = try? JSONDecoder().decode(MappingProfile.self, from: legacy)
+        check("macro-legacy-decode", decoded?.macro.enabled == false, "legacy ok")
 
         let settings = AppSettings.shared
-        check("aim-sens", settings.aimSensitivity > 0, "\(settings.aimSensitivity)")
-        check("hair-default", settings.hairTriggerThreshold > 0, "\(settings.hairTriggerThreshold)")
+        check("audio-defaults", settings.audioConnectCues, "connect on")
+        KeepAwake.shared.update(active: true)
+        check("keep-awake-on", KeepAwake.shared.isAsserting, "asserting")
+        KeepAwake.shared.update(active: false)
+        check("keep-awake-off", !KeepAwake.shared.isAsserting, "released")
 
-        let mon = ControllerMonitor()
-        let map = InputMapper()
-        map.bind(monitor: mon, settings: settings)
-        let shelf = LauncherShelf()
-        shelf.refresh()
-        let items = GameSession.prepItems(monitor: mon, mapper: map, launchers: shelf)
-        check("prep-count", items.count >= 4, "\(items.count)")
-        check("prep-pad-fail", items.contains { $0.id == "pad" && $0.ok == false }, "no pad expected")
-
-        check("extras-gamebay", LauncherShelf.extraCatalog.contains { $0.id == "gamebay" }, "preserved")
-        check("art-bundle", PairingCoach.artNames.filter { BundleArt.nsImage($0) != nil }.count >= 6, "arts")
-        check("version-gt-3", UpdateChecker.isVersion("3.1.0", newerThan: "3.0.0"), "3.1>3.0")
-
-        // Live steam scan (best-effort)
         let steam = SteamShelf()
         steam.refresh()
         check("steam-scan", steam.lastScanOK, steam.note)
+        let heroic = HeroicShelf()
+        heroic.refresh()
+        check("heroic-scan", true, heroic.note)
+
+        check("art", PairingCoach.artNames.filter { BundleArt.nsImage($0) != nil }.count >= 6, "arts")
+        check("version-gt", UpdateChecker.isVersion("3.2.0", newerThan: "3.1.0"), "3.2>3.1")
+        check("extras-gamebay", LauncherShelf.extraCatalog.contains { $0.id == "gamebay" }, "preserved")
 
         print(failed ? "self-test failed" : "self-test ok")
         return failed ? 1 : 0

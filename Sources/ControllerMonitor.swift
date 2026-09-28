@@ -36,6 +36,7 @@ final class ControllerMonitor: ObservableObject {
     private var lowBatteryAnnouncedIDs = Set<String>()
     private weak var settings: AppSettings?
     private var preferredStableKey: String?
+    private var wasConnected = false
 
     var lastRediscoverDescription: String {
         guard let d = lastRediscoverAt else { return "never" }
@@ -177,6 +178,15 @@ final class ControllerMonitor: ObservableObject {
                 self?.connectPulse = false
             }
         }
+        let nowConnected = !next.isEmpty
+        if let settings {
+            if nowConnected && !wasConnected {
+                GameAudio.play(.connected, settings: settings)
+            } else if !nowConnected && wasConnected {
+                GameAudio.play(.disconnected, settings: settings)
+            }
+        }
+        wasConnected = nowConnected
         evaluateLowBattery(in: next)
         if let reason {
             if next.isEmpty {
@@ -248,6 +258,9 @@ final class ControllerMonitor: ObservableObject {
             if !lowBatteryAnnouncedIDs.contains(low.id) {
                 lowBatteryAnnouncedIDs.insert(low.id)
                 postLowBatteryNotification(text)
+                if let settings {
+                    GameAudio.play(.lowBattery, settings: settings)
+                }
             }
         } else {
             lowBatteryBanner = nil

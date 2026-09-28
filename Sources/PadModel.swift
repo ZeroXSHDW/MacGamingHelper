@@ -146,11 +146,37 @@ struct MappingBinding: Codable, Equatable, Identifiable {
     }
 }
 
+struct MappingMacro: Codable, Equatable {
+    var enabled: Bool
+    var holdControl: String
+    var tapControl: String
+    var keyCode: UInt16
+    var keyName: String
+
+    static let off = MappingMacro(enabled: false, holdControl: "L1", tapControl: "Square", keyCode: 14, keyName: "E")
+}
+
 struct MappingProfile: Codable, Equatable, Identifiable {
     var id: String
     var name: String
     var deadzone: Double
     var bindings: [MappingBinding]
+    var macro: MappingMacro
+
+    enum CodingKeys: String, CodingKey { case id, name, deadzone, bindings, macro }
+
+    init(id: String, name: String, deadzone: Double, bindings: [MappingBinding], macro: MappingMacro = .off) {
+        self.id = id; self.name = name; self.deadzone = deadzone; self.bindings = bindings; self.macro = macro
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        deadzone = try c.decode(Double.self, forKey: .deadzone)
+        bindings = try c.decode([MappingBinding].self, forKey: .bindings)
+        macro = try c.decodeIfPresent(MappingMacro.self, forKey: .macro) ?? .off
+    }
 
     static let fpsWASD = MappingProfile(
         id: "fps-wasd",
@@ -176,7 +202,8 @@ struct MappingProfile: Codable, Equatable, Identifiable {
             .key("Down", code: 125, name: "↓"),
             .key("Left", code: 123, name: "←"),
             .key("Right", code: 124, name: "→"),
-        ]
+        ],
+        macro: .off
     )
 
     static let arrowsBrowse = MappingProfile(
@@ -196,7 +223,8 @@ struct MappingProfile: Codable, Equatable, Identifiable {
             .key("Circle", code: 53, name: "Esc"),
             .key("Options", code: 53, name: "Esc"),
             .key("Share", code: 48, name: "Tab"),
-        ]
+        ],
+        macro: .off
     )
 
     static let presets: [MappingProfile] = [.fpsWASD, .arrowsBrowse]
@@ -206,7 +234,8 @@ struct MappingProfile: Codable, Equatable, Identifiable {
             id: "custom-\(UUID().uuidString.prefix(8))",
             name: name,
             deadzone: deadzone,
-            bindings: bindings
+            bindings: bindings,
+            macro: macro
         )
     }
 }

@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.2.0 — 2026-09-28
+
+- Keep-awake (IOPMAssertion) while Play HUD or Gaming session is on
+- Live Input Tester page (press flash + stick trails + optional beeps)
+- Audio cues: connect/disconnect + low battery
+- Steam library: multi-folder roots, LastUpdated sort, search, favourites
+- Heroic/Epic/GOG best-effort library list
+- CrossOver / Whisky / GPTK detection on Session Prep
+- One combo macro per mapping profile (hold + tap → key)
+- Mouse acceleration tip + Open Mouse settings
+- Play HUD: profile name, Pairing shortcut when disconnected, remembered position
+
 ## 3.1.0 — 2026-09-28
 
 Gaming-first DualShock 4 session tools.
