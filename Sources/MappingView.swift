@@ -3,6 +3,16 @@ import SwiftUI
 struct MappingPage: View {
     @EnvironmentObject private var mapper: InputMapper
     @EnvironmentObject private var monitor: ControllerMonitor
+    @EnvironmentObject private var settings: AppSettings
+    @State private var newProfileName = "My profile"
+    @State private var editControl: String = "Cross"
+
+    private let editableControls = [
+        "Cross", "Circle", "Square", "Triangle",
+        "L1", "R1", "L2", "R2", "Share", "Options",
+        "Up", "Down", "Left", "Right",
+        "LeftStickUp", "LeftStickDown", "LeftStickLeft", "LeftStickRight",
+    ]
 
     var body: some View {
         ScrollView {
@@ -26,14 +36,12 @@ struct MappingPage: View {
                         Toggle("Enable mapping", isOn: Binding(
                             get: { mapper.enabled },
                             set: { on in
-                                if on {
-                                    _ = mapper.enableIfTrusted()
-                                } else {
-                                    mapper.stop()
-                                }
+                                if on { _ = mapper.enableIfTrusted() } else { mapper.stop() }
                             }
                         ))
                         .toggleStyle(.switch)
+
+                        Toggle("Touchpad → mouse (click + move)", isOn: $settings.touchpadAsMouse)
 
                         HStack {
                             Circle()
@@ -47,14 +55,12 @@ struct MappingPage: View {
                             PillButton(title: "Open Accessibility") { mapper.openAccessibilitySettings() }
                             PillButton(title: "Recheck") {
                                 mapper.refreshTrust()
-                                if mapper.enabled && !mapper.accessibilityTrusted {
-                                    mapper.stop()
-                                }
+                                if mapper.enabled && !mapper.accessibilityTrusted { mapper.stop() }
                             }
                         }
 
                         if !mapper.accessibilityTrusted {
-                            Text("Path: System Settings → Privacy & Security → Accessibility → enable Mac Gaming Helper → Recheck. Until then Mapping stays disabled.")
+                            Text("Path: System Settings → Privacy & Security → Accessibility → enable Mac Gaming Helper → Recheck.")
                                 .font(.caption)
                                 .foregroundStyle(Theme.warn)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -76,11 +82,11 @@ struct MappingPage: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Profiles")
                             .font(.headline)
-                        ForEach(MappingProfile.presets) { preset in
+                        ForEach(mapper.profiles) { preset in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(preset.name).font(.callout.weight(.semibold))
-                                    Text("\(preset.bindings.count) bindings · deadzone \(String(format: "%.2f", preset.deadzone))")
+                                    Text("\(preset.bindings.count) bindings · deadzone \(String(format: "%.2f", preset.deadzone))\(ProfileStore.isPreset(preset.id) ? "" : " · custom")")
                                         .font(.caption)
                                         .foregroundStyle(Theme.mute)
                                 }
@@ -98,11 +104,51 @@ struct MappingPage: View {
                         }
 
                         Divider()
-                        Text("Stick → key threshold")
-                        Slider(value: $mapper.stickThreshold, in: 0.15...0.75)
-                        Text(String(format: "%.2f", mapper.stickThreshold))
-                            .font(.caption.monospaced())
-                            .foregroundStyle(Theme.mute)
+                        HStack {
+                            TextField("New profile name", text: $newProfileName)
+                                .textFieldStyle(.roundedBorder)
+                            PillButton(title: "Duplicate active", primary: true) {
+                                let name = newProfileName.trimmingCharacters(in: .whitespacesAndNewlines)
+                                mapper.duplicateAsCustom(named: name.isEmpty ? "Custom" : name)
+                            }
+                            if !ProfileStore.isPreset(mapper.profile.id) {
+                                PillButton(title: "Save") { mapper.saveCurrentProfile() }
+                                PillButton(title: "Delete", role: .destructive) { mapper.deleteCurrentIfCustom() }
+                            }
+                        }
+                    }
+                }
+
+                if !ProfileStore.isPreset(mapper.profile.id) {
+                    Card {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Edit “\(mapper.profile.name)”")
+                                .font(.headline)
+                            HStack {
+                                Picker("Control", selection: $editControl) {
+                                    ForEach(editableControls, id: \.self) { Text($0).tag($0) }
+                                }
+                                .frame(maxWidth: 220)
+                                Picker("Key", selection: Binding(
+                                    get: {
+                                        mapper.profile.bindings.first(where: { $0.control == editControl && $0.target == .key })?.keyCode ?? UInt16(49)
+                                    },
+                                    set: { code in
+                                        let name = KeyChoices.options.first(where: { $0.code == code })?.name ?? "Key"
+                                        mapper.updateBindingKey(control: editControl, code: code, name: name)
+                                    }
+                                )) {
+                                    ForEach(KeyChoices.options, id: \.code) { opt in
+                                        Text(opt.name).tag(opt.code)
+                                    }
+                                }
+                                .frame(maxWidth: 160)
+                                PillButton(title: "Save profile", primary: true) { mapper.saveCurrentProfile() }
+                            }
+                            Text("Changes apply immediately while this custom profile is active. Save writes JSON to Application Support.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.mute)
+                        }
                     }
                 }
 
@@ -142,6 +188,7 @@ struct MappingPage: View {
             .padding(28)
         }
         .background(Theme.heroGradient.opacity(0.2))
+        .onAppear { mapper.reloadProfiles() }
     }
 
     private func label(for b: MappingBinding) -> String {

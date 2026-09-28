@@ -11,6 +11,16 @@ enum PadKind: String, Equatable {
         self == .dualShock4 || self == .dualSense
     }
 
+    var shortLabel: String {
+        switch self {
+        case .dualShock4: return "DS4"
+        case .dualSense: return "DS5"
+        case .xbox: return "Xbox"
+        case .generic: return "Pad"
+        case .none: return "—"
+        }
+    }
+
     var face: (a: String, b: String, x: String, y: String) {
         switch self {
         case .dualShock4, .dualSense:
@@ -21,6 +31,12 @@ enum PadKind: String, Equatable {
     }
 }
 
+enum PadTransport: String, Equatable {
+    case usb = "USB"
+    case bluetooth = "Bluetooth"
+    case unknown = "Unknown"
+}
+
 struct ControllerSnapshot: Identifiable, Equatable {
     var id: String
     var title: String
@@ -28,6 +44,8 @@ struct ControllerSnapshot: Identifiable, Equatable {
     var category: String
     var kind: PadKind
     var battery: String
+    var batteryPercent: Int?
+    var batteryCharging: Bool
     var connected: Bool
     var buttons: [String]
     var lx: Double
@@ -37,9 +55,15 @@ struct ControllerSnapshot: Identifiable, Equatable {
     var lt: Double
     var rt: Double
     var touchpadPressed: Bool
+    var touchpadX: Double
+    var touchpadY: Double
     var homePressed: Bool
     var lightBarSupported: Bool
+    var hapticsSupported: Bool
     var playerIndex: Int
+    var transport: PadTransport
+
+    var transportLabel: String { transport.rawValue }
 
     static let empty = ControllerSnapshot(
         id: "none",
@@ -48,13 +72,18 @@ struct ControllerSnapshot: Identifiable, Equatable {
         category: "",
         kind: .none,
         battery: "",
+        batteryPercent: nil,
+        batteryCharging: false,
         connected: false,
         buttons: [],
         lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0,
         touchpadPressed: false,
+        touchpadX: 0, touchpadY: 0,
         homePressed: false,
         lightBarSupported: false,
-        playerIndex: -1
+        hapticsSupported: false,
+        playerIndex: -1,
+        transport: .unknown
     )
 }
 
@@ -70,13 +99,13 @@ enum MappingTarget: String, Codable, CaseIterable, Identifiable {
 
 struct MappingBinding: Codable, Equatable, Identifiable {
     var id: String
-    var control: String          // e.g. "Cross", "L1", "LeftStick", "RightStick", "L2"
+    var control: String
     var target: MappingTarget
-    var keyCode: UInt16?         // CGKeyCode
+    var keyCode: UInt16?
     var keyName: String?
-    var mouseButton: Int?        // 0 left, 1 right, 2 other
-    var mouseAxis: String?       // "x", "y", or "xy" for stick→mouse
-    var scale: Double            // mouse sensitivity or trigger threshold
+    var mouseButton: Int?
+    var mouseAxis: String?
+    var scale: Double
 
     static func key(_ control: String, code: UInt16, name: String) -> MappingBinding {
         MappingBinding(
@@ -157,4 +186,26 @@ struct MappingProfile: Codable, Equatable, Identifiable {
     )
 
     static let presets: [MappingProfile] = [.fpsWASD, .arrowsBrowse]
+
+    func duplicating(name: String) -> MappingProfile {
+        MappingProfile(
+            id: "custom-\(UUID().uuidString.prefix(8))",
+            name: name,
+            deadzone: deadzone,
+            bindings: bindings
+        )
+    }
+}
+
+/// Common key choices for the custom profile editor.
+enum KeyChoices {
+    static let options: [(name: String, code: UInt16)] = [
+        ("A", 0), ("S", 1), ("D", 2), ("F", 3), ("H", 4), ("G", 5), ("Z", 6), ("X", 7),
+        ("C", 8), ("V", 9), ("B", 11), ("Q", 12), ("W", 13), ("E", 14), ("R", 15),
+        ("Y", 16), ("T", 17), ("1", 18), ("2", 19), ("3", 20), ("4", 21), ("5", 23),
+        ("6", 22), ("=", 24), ("9", 25), ("7", 26), ("-", 27), ("8", 28), ("0", 29),
+        ("O", 31), ("U", 32), ("I", 34), ("P", 35), ("Return", 36), ("L", 37), ("J", 38),
+        ("K", 40), ("Tab", 48), ("Space", 49), ("Esc", 53),
+        ("←", 123), ("→", 124), ("↓", 125), ("↑", 126),
+    ]
 }

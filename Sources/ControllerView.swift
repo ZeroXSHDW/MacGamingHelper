@@ -3,6 +3,7 @@ import SwiftUI
 struct ControllerPage: View {
     @EnvironmentObject private var monitor: ControllerMonitor
     @EnvironmentObject private var launchers: LauncherShelf
+    @EnvironmentObject private var settings: AppSettings
 
     var body: some View {
         ScrollView {
@@ -20,6 +21,7 @@ struct ControllerPage: View {
                 readouts
                 if monitor.selected.connected {
                     lightAndHaptics
+                    deadzoneCard
                 }
                 tips
             }
@@ -148,6 +150,7 @@ struct ControllerPage: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Light bar & haptics")
                     .font(.headline)
+                connectionDetail
                 if monitor.selected.lightBarSupported {
                     HStack {
                         Text("Tint")
@@ -156,16 +159,64 @@ struct ControllerPage: View {
                             .fill(Color(hue: monitor.lightHue, saturation: 0.85, brightness: 0.95))
                             .frame(width: 22, height: 22)
                     }
-                    HStack {
-                        PillButton(title: "Apply light bar", primary: true) { monitor.applyLightBar() }
-                        PillButton(title: "Pulse rumble") { monitor.pulseHaptics() }
-                    }
+                    PillButton(title: "Apply light bar", primary: true) { monitor.applyLightBar() }
                 } else {
                     Text(monitor.selected.connected
                          ? "This pad does not expose a controllable light bar through Game Controller."
                          : "Connect a DualShock 4 / DualSense to try light bar tint and rumble.")
                         .foregroundStyle(Theme.mute)
-                    PillButton(title: "Pulse rumble") { monitor.pulseHaptics() }
+                }
+                Text("Haptic tests")
+                    .font(.subheadline.weight(.semibold))
+                HStack(spacing: 8) {
+                    ForEach(HapticPatternKind.allCases) { kind in
+                        PillButton(title: kind.title, primary: kind == .medium) {
+                            monitor.pulseHaptics(kind)
+                        }
+                    }
+                }
+                if !monitor.lastHapticNote.isEmpty {
+                    Text(monitor.lastHapticNote)
+                        .font(.caption)
+                        .foregroundStyle(Theme.mute)
+                }
+            }
+        }
+    }
+
+    private var connectionDetail: some View {
+        let s = monitor.selected
+        return VStack(alignment: .leading, spacing: 4) {
+            Text("Connection")
+                .font(.subheadline.weight(.semibold))
+            Text([
+                s.transportLabel,
+                s.vendor.isEmpty ? nil : s.vendor,
+                s.category.isEmpty ? nil : s.category,
+                s.playerIndex >= 0 ? "Player \(s.playerIndex + 1)" : nil,
+                s.battery.isEmpty ? nil : s.battery,
+            ].compactMap { $0 }.joined(separator: " · "))
+            .font(.caption)
+            .foregroundStyle(Theme.mute)
+        }
+    }
+
+    private var deadzoneCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Stick deadzone (live)")
+                    .font(.headline)
+                HStack(spacing: 20) {
+                    DeadzoneRing(title: "Left", x: monitor.selected.lx, y: monitor.selected.ly, deadzone: settings.stickDeadzone)
+                    DeadzoneRing(title: "Right", x: monitor.selected.rx, y: monitor.selected.ry, deadzone: settings.stickDeadzone)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(String(format: "Deadzone %.2f", settings.stickDeadzone))
+                            .font(.caption.monospaced())
+                        Slider(value: $settings.stickDeadzone, in: 0.02...0.45)
+                        Text(String(format: "Triggers L2 %.2f  R2 %.2f  (dz %.2f)", monitor.selected.lt, monitor.selected.rt, settings.triggerDeadzone))
+                            .font(.caption2)
+                            .foregroundStyle(Theme.mute)
+                    }
                 }
             }
         }
@@ -382,5 +433,34 @@ struct DualShockDiagram: View {
             .padding(.vertical, 3)
             .background(active ? Theme.ds4Blue : Color.white.opacity(0.15), in: Capsule())
             .foregroundStyle(.white)
+    }
+}
+
+
+struct DeadzoneRing: View {
+    let title: String
+    let x: Double
+    let y: Double
+    let deadzone: Double
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(title).font(.caption.weight(.semibold))
+            ZStack {
+                Circle()
+                    .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 2)
+                    .frame(width: 88, height: 88)
+                Circle()
+                    .strokeBorder(Theme.warn.opacity(0.7), lineWidth: 1.5)
+                    .frame(width: 88 * deadzone * 2, height: 88 * deadzone * 2)
+                Circle()
+                    .fill(Theme.ds4Blue)
+                    .frame(width: 10, height: 10)
+                    .offset(x: CGFloat(x) * 36, y: CGFloat(-y) * 36)
+            }
+            Text(String(format: "%+.2f, %+.2f", x, y))
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Theme.mute)
+        }
     }
 }

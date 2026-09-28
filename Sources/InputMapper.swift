@@ -4,29 +4,41 @@ import Combine
 import Foundation
 
 /// Optional DualShock → keyboard / mouse mapping for games that do not speak gamepads.
-/// Requires Accessibility (Input Monitoring is not enough for CGEventPost).
 @MainActor
 final class InputMapper: ObservableObject {
     @Published var enabled = false
     @Published var profile: MappingProfile = .fpsWASD
+    @Published var profiles: [MappingProfile] = MappingProfile.presets
     @Published var accessibilityTrusted = false
     @Published var lastAction: String = "Mapping idle"
     @Published var stickThreshold: Double = 0.35
 
     private weak var monitor: ControllerMonitor?
+    private weak var settings: AppSettings?
     private var cancellable: AnyCancellable?
     private var heldKeys = Set<UInt16>()
     private var heldMouse = Set<Int64>()
-    private var lastMouseFire = Date.distantPast
+    private var lastTouchpadX: Double?
+    private var lastTouchpadY: Double?
 
-    func bind(monitor: ControllerMonitor) {
+    func bind(monitor: ControllerMonitor, settings: AppSettings) {
         self.monitor = monitor
+        self.settings = settings
         accessibilityTrusted = AXIsProcessTrusted()
+        reloadProfiles()
+        if let match = profiles.first(where: { $0.id == settings.activeProfileID }) {
+            profile = match
+        }
+        stickThreshold = max(settings.stickDeadzone, 0.15)
         cancellable = monitor.$snapshots
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.tick()
             }
+    }
+
+    func reloadProfiles() {
+        profiles = ProfileStore.loadAll()
     }
 
     func refreshTrust() {
@@ -49,12 +61,8 @@ final class InputMapper: ObservableObject {
                 return
             }
         }
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security") {
-            NSWorkspace.shared.open(url)
-        }
     }
 
-    /// Enable only when trusted; otherwise leave Mapping off and surface the prompt path.
     func enableIfTrusted() -> Bool {
         refreshTrust()
         if accessibilityTrusted {
@@ -76,12 +84,57 @@ final class InputMapper: ObservableObject {
 
     func selectPreset(_ preset: MappingProfile) {
         profile = preset
+        settings?.activeProfileID = preset.id
         lastAction = "Loaded profile “\(preset.name)”"
+    }
+
+    func saveCurrentProfile() {
+        do {
+            try ProfileStore.save(profile)
+            reloadProfiles()
+            settings?.activeProfileID = profile.id
+            lastAction = "Saved “\(profile.name)”"
+        } catch {
+            lastAction = "Save failed: \(error.localizedDescription)"
+        }
+    }
+
+    func duplicateAsCustom(named name: String) {
+        let copy = profile.duplicating(name: name)
+        profile = copy
+        saveCurrentProfile()
+    }
+
+    func deleteCurrentIfCustom() {
+        guard !ProfileStore.isPreset(profile.id) else {
+            lastAction = "Built-in presets cannot be deleted."
+            return
+        }
+        do {
+            try ProfileStore.delete(id: profile.id)
+            reloadProfiles()
+            profile = .fpsWASD
+            settings?.activeProfileID = profile.id
+            lastAction = "Deleted custom profile."
+        } catch {
+            lastAction = "Delete failed: \(error.localizedDescription)"
+        }
+    }
+
+    func updateBindingKey(control: String, code: UInt16, name: String) {
+        if let idx = profile.bindings.firstIndex(where: { $0.control == control && $0.target == .key }) {
+            profile.bindings[idx].keyCode = code
+            profile.bindings[idx].keyName = name
+        } else {
+            profile.bindings.append(.key(control, code: code, name: name))
+        }
     }
 
     private func tick() {
         guard enabled else {
             releaseAll()
+            lastTouchpadX = nil
+            lastTouchpadY = nil
             return
         }
         guard accessibilityTrusted else {
@@ -94,7 +147,12 @@ final class InputMapper: ObservableObject {
             return
         }
 
-        let dz = profile.deadzone
+        let settingsDZ = settings?.stickDeadzone ?? profile.deadzone
+        let trigDZ = settings?.triggerDeadzone ?? 0.08
+        let sens = settings?.stickSensitivity ?? 1.0
+        let dz = max(settingsDZ, profile.deadzone * 0.5)
+        let thresh = max(stickThreshold, dz)
+
         var wantKeys = Set<UInt16>()
         var wantMouse = Set<Int64>()
         var mouseDX: Double = 0
@@ -104,12 +162,12 @@ final class InputMapper: ObservableObject {
             switch binding.target {
             case .key:
                 guard let code = binding.keyCode else { continue }
-                if isActive(control: binding.control, snap: snap, deadzone: dz, stickThreshold: stickThreshold) {
+                if isActive(control: binding.control, snap: snap, deadzone: dz, stickThreshold: thresh, triggerDeadzone: trigDZ) {
                     wantKeys.insert(code)
                 }
             case .mouseButton:
                 guard let btn = binding.mouseButton else { continue }
-                if isActive(control: binding.control, snap: snap, deadzone: dz, stickThreshold: stickThreshold) {
+                if isActive(control: binding.control, snap: snap, deadzone: dz, stickThreshold: thresh, triggerDeadzone: trigDZ) {
                     wantMouse.insert(Int64(btn))
                 }
             case .mouseMove:
@@ -117,12 +175,32 @@ final class InputMapper: ObservableObject {
                     let x = binding.control == "RightStick" ? snap.rx : snap.lx
                     let y = binding.control == "RightStick" ? snap.ry : snap.ly
                     if abs(x) > dz || abs(y) > dz {
-                        mouseDX += x * binding.scale
-                        mouseDY += -y * binding.scale
+                        mouseDX += x * binding.scale * sens
+                        mouseDY += -y * binding.scale * sens
                     }
                 }
             case .scroll, .none:
                 break
+            }
+        }
+
+        // Optional DualShock touchpad → mouse
+        if settings?.touchpadAsMouse == true {
+            if snap.touchpadPressed {
+                wantMouse.insert(0) // left click
+            }
+            let tx = snap.touchpadX
+            let ty = snap.touchpadY
+            if abs(tx) > 0.02 || abs(ty) > 0.02 {
+                if let lx = lastTouchpadX, let ly = lastTouchpadY {
+                    mouseDX += (tx - lx) * 28 * sens
+                    mouseDY += -(ty - ly) * 28 * sens
+                }
+                lastTouchpadX = tx
+                lastTouchpadY = ty
+            } else {
+                lastTouchpadX = nil
+                lastTouchpadY = nil
             }
         }
 
@@ -152,7 +230,7 @@ final class InputMapper: ObservableObject {
         }
     }
 
-    private func isActive(control: String, snap: ControllerSnapshot, deadzone: Double, stickThreshold: Double) -> Bool {
+    private func isActive(control: String, snap: ControllerSnapshot, deadzone: Double, stickThreshold: Double, triggerDeadzone: Double) -> Bool {
         switch control {
         case "Cross", "A": return snap.buttons.contains("Cross") || snap.buttons.contains("A")
         case "Circle", "B": return snap.buttons.contains("Circle") || snap.buttons.contains("B")
@@ -160,8 +238,8 @@ final class InputMapper: ObservableObject {
         case "Triangle", "Y": return snap.buttons.contains("Triangle") || snap.buttons.contains("Y")
         case "L1": return snap.buttons.contains("L1")
         case "R1": return snap.buttons.contains("R1")
-        case "L2": return snap.lt > 0.3 || snap.buttons.contains("L2")
-        case "R2": return snap.rt > 0.3 || snap.buttons.contains("R2")
+        case "L2": return snap.lt > max(0.3, triggerDeadzone) || snap.buttons.contains("L2")
+        case "R2": return snap.rt > max(0.3, triggerDeadzone) || snap.buttons.contains("R2")
         case "L3": return snap.buttons.contains("L3")
         case "R3": return snap.buttons.contains("R3")
         case "Up": return snap.buttons.contains("Up")
@@ -193,7 +271,6 @@ final class InputMapper: ObservableObject {
 
     private func postMouseButton(_ button: Int64, down: Bool) {
         let loc = NSEvent.mouseLocation
-        // Convert AppKit bottom-left to CG top-left.
         let screenH = NSScreen.main?.frame.height ?? 0
         let point = CGPoint(x: loc.x, y: screenH - loc.y)
         let type: CGEventType

@@ -24,6 +24,7 @@ This project **continues and improves** the local predecessor Game Bay (`~/Proje
 - Battery, light-bar tint (when exposed), haptic pulse
 - **Pairing / Setup** coach: Bluetooth Share+PS, **USB-first** rescue, reset pinhole, Steam Big Picture vs Mapping, permissions
 - Optional **keyboard / mouse mapping** profiles (FPS WASD, Arrows) for non-gamepad titles
+- **Menu bar** status, Settings (login item, deadzones, updates), custom mapping profiles, low-battery alerts
 - Offline self-test: `MacGamingHelper --self-test`
 - Offline — no accounts required for controller status or mapping
 

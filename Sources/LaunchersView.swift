@@ -133,7 +133,8 @@ struct HelpPage: View {
                         Text("How to run")
                             .font(.headline)
                         Text("Open ~/Applications/Mac Gaming Helper.app — or rebuild with scripts/install.sh.")
-                        Text("Clone build: see README (scripts/install.sh).")
+                        Text("Version \(Theme.version). Shortcuts: ⌘1–⌘6 tabs, ⌘R Rediscover.")
+                        Text("Settings: menu bar, login item, deadzones, Check for updates.")
                         Text("Game Bay (unchanged): ~/Projects/game-bay and ~/Applications/Game Bay.app")
                     }
                     .font(.callout)

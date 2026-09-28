@@ -3,6 +3,19 @@ import CoreHaptics
 import Foundation
 import GameController
 import SwiftUI
+import UserNotifications
+
+enum HapticPatternKind: String, CaseIterable, Identifiable {
+    case short, medium, rumble
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .short: return "Short"
+        case .medium: return "Medium"
+        case .rumble: return "Rumble"
+        }
+    }
+}
 
 /// DualShock 4–first controller desk using Apple's Game Controller framework.
 @MainActor
@@ -12,16 +25,25 @@ final class ControllerMonitor: ObservableObject {
     @Published var statusLine: String = "Looking for controllers…"
     @Published var lightHue: Double = 0.55
     @Published var discovering = false
+    @Published var lowBatteryBanner: String?
+    @Published var lastHapticNote: String = ""
 
     private var timer: Timer?
     private var started = false
     private var observers: [NSObjectProtocol] = []
+    private var lowBatteryAnnouncedIDs = Set<String>()
+    private weak var settings: AppSettings?
 
     var selected: ControllerSnapshot {
         if let id = selectedID, let hit = snapshots.first(where: { $0.id == id }) {
             return hit
         }
         return snapshots.first ?? .empty
+    }
+
+    func attach(settings: AppSettings) {
+        self.settings = settings
+        lightHue = settings.preferredLightHue
     }
 
     func start() {
@@ -37,6 +59,7 @@ final class ControllerMonitor: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh(reason: nil) }
         }
+        requestNotificationPermission()
         rediscover()
         refresh(reason: "start")
     }
@@ -69,36 +92,47 @@ final class ControllerMonitor: ObservableObject {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         color.usingColorSpace(.deviceRGB)?.getRed(&r, green: &g, blue: &b, alpha: &a)
         light.color = GCColor(red: Float(r), green: Float(g), blue: Float(b))
+        settings?.preferredLightHue = lightHue
         statusLine = "Light bar updated."
     }
 
-    func pulseHaptics() {
+    func pulseHaptics(_ kind: HapticPatternKind = .medium) {
         guard let controller = matchedController(for: selected.id) else { return }
         guard let haptics = controller.haptics,
               let engine = haptics.createEngine(withLocality: .all) else {
-            statusLine = "Haptics not available on this pad."
+            lastHapticNote = "Haptics not available on this pad."
+            statusLine = lastHapticNote
             return
         }
         do {
             try engine.start()
+            let (intensity, sharpness, duration): (Float, Float, TimeInterval) = {
+                switch kind {
+                case .short: return (0.85, 0.7, 0.12)
+                case .medium: return (0.7, 0.4, 0.35)
+                case .rumble: return (0.95, 0.25, 0.85)
+                }
+            }()
             let event = CHHapticEvent(
                 eventType: .hapticContinuous,
                 parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.7),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.4),
+                    CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
+                    CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness),
                 ],
                 relativeTime: 0,
-                duration: 0.35
+                duration: duration
             )
             let pattern = try CHHapticPattern(events: [event], parameters: [])
             let player = try engine.makePlayer(with: pattern)
             try player.start(atTime: 0)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.2) {
                 engine.stop(completionHandler: nil)
             }
-            statusLine = "Haptic pulse sent."
+            lastHapticNote = "\(kind.title) haptic sent."
+            statusLine = lastHapticNote
         } catch {
-            statusLine = "Haptics failed: \(error.localizedDescription)"
+            lastHapticNote = "Haptics failed: \(error.localizedDescription)"
+            statusLine = lastHapticNote
         }
     }
 
@@ -130,6 +164,7 @@ final class ControllerMonitor: ObservableObject {
                 ?? next.first(where: { $0.kind == .dualSense })?.id
                 ?? next.first?.id
         }
+        evaluateLowBattery(in: next)
         if let reason {
             if next.isEmpty {
                 statusLine = "No controller connected (\(reason)). Try USB Micro-USB + PS, or Share+PS → Bluetooth → Rediscover. See Pairing / Setup."
@@ -140,6 +175,42 @@ final class ControllerMonitor: ObservableObject {
         } else if next.isEmpty {
             statusLine = "Waiting for a DualShock 4… If lights flash but nothing lists, use USB first (Pairing / Setup)."
         }
+        MenuBarController.shared.refreshTitle()
+    }
+
+    private func evaluateLowBattery(in snaps: [ControllerSnapshot]) {
+        guard settings?.lowBatteryAlerts != false else {
+            lowBatteryBanner = nil
+            return
+        }
+        let connectedIDs = Set(snaps.map(\.id))
+        lowBatteryAnnouncedIDs = lowBatteryAnnouncedIDs.intersection(connectedIDs)
+        if let low = snaps.first(where: { snap in
+            guard let p = snap.batteryPercent, !snap.batteryCharging else { return false }
+            return p <= 20
+        }) {
+            let text = "Low battery: \(low.kind.rawValue) at \(low.batteryPercent ?? 0)%"
+            lowBatteryBanner = text
+            if !lowBatteryAnnouncedIDs.contains(low.id) {
+                lowBatteryAnnouncedIDs.insert(low.id)
+                postLowBatteryNotification(text)
+            }
+        } else {
+            lowBatteryBanner = nil
+        }
+    }
+
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    private func postLowBatteryNotification(_ body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Mac Gaming Helper"
+        content.body = body
+        content.sound = .default
+        let req = UNNotificationRequest(identifier: "low-battery-\(UUID().uuidString)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 
     private func snapshot(from controller: GCController) -> ControllerSnapshot? {
@@ -168,11 +239,17 @@ final class ControllerMonitor: ObservableObject {
         if pad.buttonOptions?.isPressed == true { pressed.append(kind.isPlayStation ? "Share" : "View") }
 
         var touchpad = false
+        var tpx: Double = 0
+        var tpy: Double = 0
         if let ds4 = pad as? GCDualShockGamepad {
             touchpad = ds4.touchpadButton.isPressed
+            tpx = Double(ds4.touchpadPrimary.xAxis.value)
+            tpy = Double(ds4.touchpadPrimary.yAxis.value)
             if touchpad { pressed.append("Touchpad") }
         } else if let dual = pad as? GCDualSenseGamepad {
             touchpad = dual.touchpadButton.isPressed
+            tpx = Double(dual.touchpadPrimary.xAxis.value)
+            tpy = Double(dual.touchpadPrimary.yAxis.value)
             if touchpad { pressed.append("Touchpad") }
         }
 
@@ -191,13 +268,18 @@ final class ControllerMonitor: ObservableObject {
             title = kind.rawValue
         }
 
+        let (batText, batPct, charging) = batteryInfo(controller)
+        let transport: PadTransport = controller.isAttachedToDevice ? .usb : .bluetooth
+
         return ControllerSnapshot(
             id: stableID(for: controller),
             title: title,
             vendor: vendor,
             category: category,
             kind: kind,
-            battery: batteryText(controller),
+            battery: batText,
+            batteryPercent: batPct,
+            batteryCharging: charging,
             connected: true,
             buttons: pressed,
             lx: Double(pad.leftThumbstick.xAxis.value),
@@ -207,9 +289,13 @@ final class ControllerMonitor: ObservableObject {
             lt: Double(pad.leftTrigger.value),
             rt: Double(pad.rightTrigger.value),
             touchpadPressed: touchpad,
+            touchpadX: tpx,
+            touchpadY: tpy,
             homePressed: home,
             lightBarSupported: controller.light != nil,
-            playerIndex: controller.playerIndex.rawValue
+            hapticsSupported: controller.haptics != nil,
+            playerIndex: controller.playerIndex.rawValue,
+            transport: transport
         )
     }
 
@@ -228,14 +314,14 @@ final class ControllerMonitor: ObservableObject {
         return .generic
     }
 
-    private func batteryText(_ controller: GCController) -> String {
-        guard let battery = controller.battery else { return "Battery not reported" }
+    private func batteryInfo(_ controller: GCController) -> (String, Int?, Bool) {
+        guard let battery = controller.battery else { return ("Battery not reported", nil, false) }
         let percent = Int((battery.batteryLevel * 100).rounded())
         switch battery.batteryState {
-        case .charging: return "Charging \(percent)%"
-        case .full: return "Full \(percent)%"
-        case .discharging: return "\(percent)%"
-        default: return "Connected"
+        case .charging: return ("Charging \(percent)%", percent, true)
+        case .full: return ("Full \(percent)%", percent, false)
+        case .discharging: return ("\(percent)%", percent, false)
+        default: return ("Connected", percent, false)
         }
     }
 }

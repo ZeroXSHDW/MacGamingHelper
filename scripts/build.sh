@@ -67,9 +67,9 @@ cat > "$stage/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>2.2.0</string>
+  <string>2.3.0</string>
   <key>CFBundleVersion</key>
-  <string>4</string>
+  <string>5</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>
@@ -99,6 +99,7 @@ cp -f "$root/Resources/"*.png "$stage/Contents/Resources/"
 sources=("$root"/Sources/*.swift)
 swiftc -parse-as-library -O -sdk "$sdk" -target arm64-apple-macosx14.0 \
   -framework SwiftUI -framework AppKit -framework GameController -framework CoreHaptics \
+  -framework ServiceManagement -framework UserNotifications \
   -o "$stage/Contents/MacOS/MacGamingHelper" \
   "${sources[@]}"
 codesign --force --sign - --entitlements "$root/scripts/entitlements.plist" "$stage" 2>/dev/null \
