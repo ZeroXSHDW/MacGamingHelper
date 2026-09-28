@@ -165,13 +165,26 @@ struct HelpPage: View {
                 }
 
                 Card {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("How to run")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Easiest run")
                             .font(.headline)
-                        Text("Open ~/Applications/Mac Gaming Helper.app — or rebuild with scripts/install.sh.")
-                        Text("Version \(Theme.version). Shortcuts: ⌘1–⌘6 tabs, ⌘R Rediscover.")
-                        Text("Settings: menu bar, login item, deadzones, Check for updates.")
-                        Text("Game Bay (unchanged): ~/Projects/game-bay and ~/Applications/Game Bay.app")
+                        Text("1. Open /Applications/Mac Gaming Helper.app (or Desktop → Start Mac Gaming Helper.command)")
+                        Text("2. Tap Start gaming on the Play page (or menu bar → Start gaming)")
+                        Text("3. Performance Bar appears at the top — play")
+                        Text("Version \(Theme.version). ⇧⌘G Start gaming · ⌃⌥⌘P Overlay · ⌘R Rediscover.")
+                        Text("Game Bay (unchanged): ~/Projects/game-bay")
+                            .foregroundStyle(Theme.mute)
+                        HStack {
+                            PillButton(title: "Reset first-run tour") {
+                                settings.didShowWelcome = false
+                            }
+                            PillButton(title: "Fix “can’t be opened”") {
+                                EasyRun.copyGatekeeperCommand()
+                            }
+                        }
+                        Text("Gatekeeper: copies `xattr -cr` command to clipboard. Or run scripts/fix-gatekeeper.sh. First open may need Right-click → Open.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
                     }
                     .font(.callout)
                 }

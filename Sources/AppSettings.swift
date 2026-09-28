@@ -56,6 +56,8 @@ final class AppSettings: ObservableObject {
         static let metricPing = "settings.metricPing"
         static let metricMapping = "settings.metricMapping"
         static let metricAwake = "settings.metricAwake"
+        static let loginStartGaming = "settings.loginStartGaming"
+        static let keepInDock = "settings.keepInDock"
     }
 
     @Published var showMenuBar: Bool {
@@ -194,6 +196,15 @@ final class AppSettings: ObservableObject {
     @Published var audioTesterBeeps: Bool {
         didSet { d.set(audioTesterBeeps, forKey: Key.audioTester) }
     }
+    @Published var loginStartGaming: Bool {
+        didSet { d.set(loginStartGaming, forKey: Key.loginStartGaming) }
+    }
+    @Published var keepInDock: Bool {
+        didSet {
+            d.set(keepInDock, forKey: Key.keepInDock)
+            NSApp.setActivationPolicy(keepInDock ? .regular : .regular)
+        }
+    }
     @Published var launchAtLoginEnabled: Bool = false
     @Published var launchAtLoginNote: String = ""
 
@@ -259,6 +270,8 @@ final class AppSettings: ObservableObject {
         audioConnectCues = d.object(forKey: Key.audioConnect) as? Bool ?? true
         audioLowBatteryCue = d.object(forKey: Key.audioLowBat) as? Bool ?? true
         audioTesterBeeps = d.bool(forKey: Key.audioTester)
+        loginStartGaming = d.bool(forKey: Key.loginStartGaming)
+        keepInDock = d.object(forKey: Key.keepInDock) as? Bool ?? true
         refreshLoginItemState()
         syncKeepAwake()
     }

@@ -82,6 +82,10 @@ final class MenuBarController: ObservableObject {
         add("Open Mac Gaming Helper", #selector(openMainWindow))
         add("Rediscover Controllers", #selector(rediscover))
         menu.addItem(.separator())
+        let gaming = settings?.gamingSessionActive == true || settings?.showOverlay == true
+        add(gaming ? "Stop gaming session" : "Start gaming", #selector(toggleGaming))
+        add("Start gaming + Steam Big Picture", #selector(startGamingSteam))
+        menu.addItem(.separator())
         add("Prep Steam session", #selector(prepSteam))
         let ov = settings?.showOverlay == true
         let mode = settings?.overlayMode == .performance ? "Performance Bar" : "Compact HUD"
@@ -124,4 +128,20 @@ final class MenuBarController: ObservableObject {
     }
     @objc private func toggleMapping() { mapper?.togglePauseHotkey() }
     @objc private func quitApp() { NSApp.terminate(nil) }
+
+    @objc private func toggleGaming() {
+        if settings?.gamingSessionActive == true || settings?.showOverlay == true {
+            EasyRun.stopGaming()
+        } else {
+            EasyRun.startGaming(mapper: mapper, launchers: launchers, openSteam: false)
+        }
+        rebuildMenu()
+    }
+
+    @objc private func startGamingSteam() {
+        EasyRun.startGaming(mapper: mapper, launchers: launchers, openSteam: true)
+        rebuildMenu()
+    }
+
+    func rebuildMenuPublic() { rebuildMenu() }
 }

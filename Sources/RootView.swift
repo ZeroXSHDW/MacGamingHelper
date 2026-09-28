@@ -176,18 +176,28 @@ struct RootView: View {
             settings.lastTab = new.rawValue
         }
         .sheet(isPresented: $showWelcome) {
-            WelcomeSheet(
+            EasyFirstRunSheet(
+                onFinished: { goPlay, startGaming in
+                    settings.didShowWelcome = true
+                    showWelcome = false
+                    if goPlay {
+                        page = .play
+                        settings.lastTab = NavPage.play.rawValue
+                    }
+                    if startGaming {
+                        EasyRun.startGaming(mapper: mapper, launchers: launchers, openSteam: false)
+                    }
+                },
                 onPairing: {
                     settings.didShowWelcome = true
                     showWelcome = false
                     page = .setup
                     settings.lastTab = NavPage.setup.rawValue
-                },
-                onDismiss: {
-                    settings.didShowWelcome = true
-                    showWelcome = false
                 }
             )
+            .environmentObject(monitor)
+            .environmentObject(mapper)
+            .environmentObject(settings)
         }
         .onReceive(NotificationCenter.default.publisher(for: .mghGoPage)) { note in
             if let raw = note.object as? String, let dest = NavPage(rawValue: raw) {
@@ -215,6 +225,13 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .mghToggleOverlayMode)) { _ in
             GamingOverlayController.shared.toggleMode()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .mghStartGaming)) { note in
+            let steam = (note.object as? Bool) ?? false
+            EasyRun.startGaming(mapper: mapper, launchers: launchers, openSteam: steam)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .mghStopGaming)) { _ in
+            EasyRun.stopGaming()
+        }
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: monitor.selected.connected)
         .animation(.easeInOut(duration: 0.25), value: monitor.lowBatteryBanner)
     }
@@ -227,27 +244,103 @@ struct RootView: View {
     }
 }
 
-struct WelcomeSheet: View {
+struct EasyFirstRunSheet: View {
+    let onFinished: (_ goPlay: Bool, _ startGaming: Bool) -> Void
     let onPairing: () -> Void
-    let onDismiss: () -> Void
+    @EnvironmentObject private var monitor: ControllerMonitor
+    @EnvironmentObject private var mapper: InputMapper
+    @EnvironmentObject private var settings: AppSettings
+    @StateObject private var perms = PermissionStatusModel()
+    @State private var step = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Welcome to Mac Gaming Helper")
+            Text("Get ready in 3 steps")
                 .font(.title.weight(.bold))
-            Text("Pair a DualShock 4, then watch the Controller desk light up. If Bluetooth won’t list the pad, use USB-first steps in Pairing.")
-                .foregroundStyle(Theme.mute)
-                .fixedSize(horizontal: false, vertical: true)
-            HeroPadArt(connected: false, maxHeight: 140)
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel("Stylized DualShock silhouette illustration")
+            Text("Step \(step + 1) of 3")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.accent)
+
+            Group {
+                switch step {
+                case 0:
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("1 · Permissions").font(.headline)
+                        Text("macOS blocks silent grants — open each pane and enable Mac Gaming Helper.")
+                            .font(.callout).foregroundStyle(Theme.mute)
+                        PermissionStatusRow(
+                            title: "Bluetooth",
+                            detail: perms.bluetoothLabel,
+                            ok: perms.bluetoothOK,
+                            actionTitle: "Open",
+                            action: { PermissionsHelper.openBluetoothPrivacy() }
+                        )
+                        PermissionStatusRow(
+                            title: "Accessibility",
+                            detail: perms.accessibilityOK ? "Granted (Mapping OK)" : "Needed only for Mapping",
+                            ok: perms.accessibilityOK,
+                            actionTitle: "Open",
+                            action: { PermissionsHelper.openAccessibility() }
+                        )
+                        PermissionStatusRow(
+                            title: "Notifications",
+                            detail: perms.notificationsLabel,
+                            ok: perms.notificationsOK,
+                            actionTitle: "Open",
+                            action: {
+                                PermissionsHelper.requestNotificationAuth()
+                                PermissionsHelper.openNotifications()
+                            }
+                        )
+                        PillButton(title: "Open all permission panes") { EasyRun.openAllPermissionPanes() }
+                    }
+                case 1:
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("2 · Pair your controller").font(.headline)
+                        Text(monitor.selected.connected
+                             ? "Connected: \(monitor.selected.kind.shortLabel) — you’re good."
+                             : "Prefer USB Micro-USB + hold PS if Bluetooth won’t list DualShock 4. Then Rediscover.")
+                            .font(.callout).foregroundStyle(Theme.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HeroPadArt(connected: monitor.selected.connected, maxHeight: 120)
+                            .frame(maxWidth: .infinity)
+                        HStack {
+                            PillButton(title: "Open Pairing coach", primary: true, action: onPairing)
+                            PillButton(title: "Rediscover") { monitor.rediscover() }
+                            PillButton(title: "Bluetooth") { PermissionsHelper.openBluetoothSettings() }
+                        }
+                    }
+                default:
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("3 · Start gaming").font(.headline)
+                        Text("One tap turns on the Performance Bar (top), keep-awake, and menu bar — then you’re ready to play.")
+                            .font(.callout).foregroundStyle(Theme.mute)
+                        PillButton(title: "Start gaming", primary: true) {
+                            onFinished(true, true)
+                        }
+                        PillButton(title: "Start gaming + Steam Big Picture") {
+                            EasyRun.startGaming(mapper: mapper, launchers: nil, openSteam: true)
+                            onFinished(true, false)
+                        }
+                        PillButton(title: "Skip for now") {
+                            onFinished(true, false)
+                        }
+                    }
+                }
+            }
+
             HStack {
-                PillButton(title: "Open Pairing", primary: true, action: onPairing)
-                PillButton(title: "Start exploring", action: onDismiss)
+                if step > 0 {
+                    PillButton(title: "Back") { step -= 1 }
+                }
+                Spacer()
+                if step < 2 {
+                    PillButton(title: "Next", primary: true) { step += 1; perms.refresh() }
+                }
             }
         }
         .padding(28)
-        .frame(width: 480)
-        .accessibilityElement(children: .contain)
+        .frame(width: 520)
+        .onAppear { perms.refresh() }
     }
 }

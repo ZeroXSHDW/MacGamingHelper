@@ -55,3 +55,19 @@ echo "desktop link $desk → $target"
 echo "source remains at $root (Game Bay untouched at $HOME/Projects/game-bay)"
 spctl --assess --type execute -v "$target" 2>&1 || true
 codesign -dv --verbose=2 "$target" 2>&1 | head -20 || true
+
+# Desktop double-click launcher
+cmd_src="$root/scripts/Start Mac Gaming Helper.command"
+cmd_desk="$HOME/Desktop/Start Mac Gaming Helper.command"
+if [[ -f "$cmd_src" ]]; then
+  cp -f "$cmd_src" "$cmd_desk"
+  chmod +x "$cmd_desk"
+  echo "desktop launcher $cmd_desk"
+fi
+
+echo ""
+echo "Easiest run:"
+echo "  open -a 'Mac Gaming Helper'"
+echo "  or double-click Desktop / Start Mac Gaming Helper.command"
+echo "  or: $cmd_desk"
+echo "Gatekeeper: $root/scripts/fix-gatekeeper.sh"

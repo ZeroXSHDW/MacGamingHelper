@@ -1,5 +1,14 @@
 # Mac Gaming Helper
 
+## Easiest run
+
+1. Open **`/Applications/Mac Gaming Helper.app`** (or Desktop → **Start Mac Gaming Helper.command**)
+2. Tap **Start gaming** on the Play page (or menu bar → Start gaming)
+3. The **Performance Bar** appears at the top — you’re ready
+
+If macOS says it can’t be opened: Right-click → Open, or run `scripts/fix-gatekeeper.sh`.
+
+
 Native SwiftUI macOS app for playing with a **PlayStation DualShock 4** on Apple silicon Macs (macOS 14+).
 
 ![Mac Gaming Helper banner](docs/screenshots/banner.png)

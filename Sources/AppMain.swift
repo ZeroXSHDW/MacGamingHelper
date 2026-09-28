@@ -46,6 +46,15 @@ struct MacGamingHelperApp: App {
                     MenuBarController.shared.bind(monitor: monitor, settings: settings, mapper: mapper, launchers: launchers)
                     MenuBarController.shared.applyVisibility()
                     GamingOverlayController.shared.bind(monitor: monitor, mapper: mapper, settings: settings)
+                    NSApp.setActivationPolicy(.regular) // keep Dock icon while running
+                    if settings.loginStartGaming {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            EasyRun.startGaming(mapper: mapper, launchers: launchers, openSteam: false, goPlayPage: true)
+                            if settings.startMinimizedToMenuBar {
+                                for w in NSApp.windows where !(w is NSPanel) { w.orderOut(nil) }
+                            }
+                        }
+                    }
                     session.start()
                     steam.refresh()
                     heroic.refresh()
@@ -99,6 +108,13 @@ struct MacGamingHelperApp: App {
                 Button("Prep Steam Session") {
                     NotificationCenter.default.post(name: .mghPrepSteam, object: nil)
                 }
+                Button("Start Gaming") {
+                    NotificationCenter.default.post(name: .mghStartGaming, object: false)
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                Button("Stop Gaming Session") {
+                    NotificationCenter.default.post(name: .mghStopGaming, object: nil)
+                }
                 Button("Toggle Gaming Overlay") {
                     NotificationCenter.default.post(name: .mghToggleHUD, object: nil)
                 }
@@ -119,5 +135,8 @@ extension Notification.Name {
     static let mghPrepSteam = Notification.Name("mghPrepSteam")
     static let mghToggleHUD = Notification.Name("mghToggleHUD")
     static let mghToggleOverlayMode = Notification.Name("mghToggleOverlayMode")
+    static let mghStartGaming = Notification.Name("mghStartGaming")
+    static let mghStopGaming = Notification.Name("mghStopGaming")
 }
+
 

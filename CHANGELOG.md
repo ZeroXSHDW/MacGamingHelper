@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.4.0 — 2026-09-28
+
+### Easier to run
+- Big **Start gaming** / **Start gaming + Steam Big Picture** on Play (and menu bar / ⇧⌘G)
+- 3-step first-run tour: Permissions → Pair → Start gaming (Reset tour in Help)
+- Dock & Login: keep in Dock, Launch at login + “Start gaming minimized with Performance Bar”
+- Desktop `Start Mac Gaming Helper.command` + `fix-gatekeeper.sh`
+- Permissions one screen with status lights + Open all panes
+- Start gaming turns Performance Bar on automatically; menu bar Start / Stop gaming session
+
 ## 3.3.1 — 2026-09-28
 
 - Install to **/Applications** (fallback `~/Applications`) with quarantine strip + entitlements codesign

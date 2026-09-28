@@ -17,7 +17,7 @@ struct PlayPage: View {
                         Text("Ready to play")
                             .font(.largeTitle.weight(.bold))
                             .tracking(-0.4)
-                        Text("Session prep, Steam/Heroic libraries, keep-awake, Play HUD.")
+                        Text("Start gaming in one tap — Performance Bar, keep-awake, Steam/Heroic.")
                             .foregroundStyle(Theme.mute)
                     }
                     Spacer()
@@ -39,6 +39,31 @@ struct PlayPage: View {
                             Spacer()
                             if mapper.enabled && !mapper.pausedByUser {
                                 PillButton(title: "Pause Mapping", primary: true) { mapper.togglePauseHotkey() }
+                            }
+                        }
+                    }
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("One-tap session").font(.headline)
+                        Text(settings.gamingSessionActive || settings.showOverlay
+                             ? "Gaming session is on — Performance Bar and keep-awake are active."
+                             : "Turns on the Performance Bar, keep-awake, menu bar, and Session Prep. Pauses Mapping for Steam Input.")
+                            .font(.callout)
+                            .foregroundStyle(Theme.mute)
+                        HStack(spacing: 10) {
+                            if settings.gamingSessionActive || settings.showOverlay {
+                                PillButton(title: "Stop gaming session") {
+                                    EasyRun.stopGaming()
+                                }
+                            } else {
+                                PillButton(title: "Start gaming", primary: true) {
+                                    EasyRun.startGaming(mapper: mapper, launchers: launchers, openSteam: false)
+                                }
+                            }
+                            PillButton(title: "Start gaming + Steam Big Picture", primary: !(settings.gamingSessionActive || settings.showOverlay)) {
+                                EasyRun.startGaming(mapper: mapper, launchers: launchers, openSteam: true)
                             }
                         }
                     }

@@ -9,7 +9,7 @@ enum SelfTest {
             if !ok { failed = true }
         }
 
-        check("theme-version", Theme.version.hasPrefix("3.3"), Theme.version)
+        check("theme-version", Theme.version.hasPrefix("3.4"), Theme.version)
         check(
             "nav-pages",
             NavPage.allCases.map(\.rawValue) == ["play", "controller", "tester", "mapping", "launchers", "setup", "settings", "help"],
@@ -111,6 +111,8 @@ enum SelfTest {
         check("version-gt-32", UpdateChecker.isVersion("3.3.0", newerThan: "3.2.0"), "3.3>3.2")
         check("version-gt-331", UpdateChecker.isVersion("3.3.1", newerThan: "3.3.0"), "3.3.1>3.3.0")
         check("permissions-helper", !PermissionsHelper.humanChecklist.isEmpty, "checklist")
+        check("easy-run-guidance", EasyRun.fixGatekeeperGuidance().contains("xattr"), "gatekeeper")
+        check("version-gt-34", UpdateChecker.isVersion("3.4.0", newerThan: "3.3.1"), "3.4>3.3.1")
         check("ax-api", true, PermissionsHelper.accessibilityTrusted ? "granted" : "not-granted-ok")
 
         print(failed ? "self-test failed" : "self-test ok")

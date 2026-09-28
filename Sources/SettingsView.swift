@@ -7,6 +7,7 @@ struct SettingsPage: View {
     @EnvironmentObject private var mapper: InputMapper
     @State private var updateInfo: UpdateInfo?
     @State private var checkingUpdate = false
+    @StateObject private var perms = PermissionStatusModel()
 
     var body: some View {
         ScrollView {
@@ -39,6 +40,11 @@ struct SettingsPage: View {
                         Toggle("Focus mode (Controller-first)", isOn: $settings.focusModeController)
 
                         Divider()
+                        Text("Dock & Login")
+                            .font(.subheadline.weight(.semibold))
+                        Toggle("Keep in Dock while running", isOn: $settings.keepInDock)
+                        Text("Uses a normal app icon in the Dock (recommended).")
+                            .font(.caption).foregroundStyle(Theme.mute)
                         Toggle("Launch at login", isOn: Binding(
                             get: { settings.launchAtLoginEnabled },
                             set: { settings.setLaunchAtLogin($0) }
@@ -46,7 +52,16 @@ struct SettingsPage: View {
                         Text(settings.launchAtLoginNote)
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
-                        PillButton(title: "Refresh login-item status") { settings.refreshLoginItemState() }
+                        Toggle("At login: Start gaming minimized with Performance Bar", isOn: $settings.loginStartGaming)
+                        Text("When Launch at login is on, opens quietly with the Performance Bar and keep-awake.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                        HStack {
+                            PillButton(title: "Refresh login-item status") { settings.refreshLoginItemState() }
+                            PillButton(title: "Start gaming now", primary: true) {
+                                EasyRun.startGaming(mapper: mapper, launchers: nil, openSteam: false)
+                            }
+                        }
                     }
                 }
 
@@ -54,52 +69,54 @@ struct SettingsPage: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Permissions")
                             .font(.headline)
-                        Text("macOS will not let apps grant these silently. Tap each button, then enable Mac Gaming Helper.")
+                        Text("One screen — status lights + open panes. macOS will not grant these silently.")
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
-                        HStack(spacing: 8) {
-                            PillButton(title: "Bluetooth privacy") { PermissionsHelper.openBluetoothPrivacy() }
-                            PillButton(title: "Bluetooth devices") { PermissionsHelper.openBluetoothSettings() }
-                        }
-                        HStack(spacing: 8) {
-                            PillButton(title: "Accessibility") { PermissionsHelper.openAccessibility() }
-                            PillButton(title: "Notifications") {
+                        PermissionStatusRow(
+                            title: "Bluetooth",
+                            detail: perms.bluetoothLabel,
+                            ok: perms.bluetoothOK,
+                            actionTitle: "Open",
+                            action: { PermissionsHelper.openBluetoothPrivacy() }
+                        )
+                        PermissionStatusRow(
+                            title: "Accessibility",
+                            detail: perms.accessibilityOK ? "Granted — Mapping can post keys/mouse" : "Not granted — Mapping stays off",
+                            ok: perms.accessibilityOK,
+                            actionTitle: "Open",
+                            action: { PermissionsHelper.openAccessibility() }
+                        )
+                        PermissionStatusRow(
+                            title: "Notifications",
+                            detail: perms.notificationsLabel,
+                            ok: perms.notificationsOK,
+                            actionTitle: "Open",
+                            action: {
                                 PermissionsHelper.requestNotificationAuth()
                                 PermissionsHelper.openNotifications()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { perms.refresh() }
                             }
+                        )
+                        HStack {
+                            PillButton(title: "Open all permission panes", primary: true) {
+                                EasyRun.openAllPermissionPanes()
+                            }
+                            PillButton(title: "Refresh status") { perms.refresh() }
                         }
                         HStack(spacing: 8) {
                             PillButton(title: "Local Network") { PermissionsHelper.openLocalNetwork() }
                             PillButton(title: "Automation") { PermissionsHelper.openAutomation() }
+                            PillButton(title: "Bluetooth devices") { PermissionsHelper.openBluetoothSettings() }
                         }
-                        Text(PermissionsHelper.accessibilityTrusted
-                             ? "Accessibility: granted"
-                             : "Accessibility: not granted (Mapping stays off until allowed)")
-                            .font(.caption)
-                            .foregroundStyle(PermissionsHelper.accessibilityTrusted ? Theme.good : Theme.warn)
-                        PillButton(title: "Apply recommended gaming setup", primary: true) {
-                            settings.showMenuBar = true
-                            settings.showOverlay = true
-                            settings.overlayMode = .performance
-                            settings.overlayEdge = .top
-                            settings.gamingSessionActive = true
-                            settings.metricController = true
-                            settings.metricCPU = true
-                            settings.metricMemory = true
-                            settings.metricGPU = true
-                            settings.metricPanel = true
-                            settings.metricPing = true
-                            settings.metricMapping = true
-                            settings.metricAwake = true
-                            settings.pingEnabled = true
-                            MenuBarController.shared.applyVisibility()
-                            GamingOverlayController.shared.applyVisibility()
+                        PillButton(title: "Start gaming (recommended setup)") {
+                            EasyRun.startGaming(mapper: mapper, launchers: nil, openSteam: false)
                         }
-                        Text("Recommended: Performance Bar on (top), menu bar on, keep-awake session on. Hotkey ⌃⌥⌘P.")
+                        Text("Hotkey ⌃⌥⌘P toggles overlay · ⇧⌘G Start gaming · menu bar has Start / Stop.")
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
                     }
                 }
+                .onAppear { perms.refresh() }
 
                 Card {
                     VStack(alignment: .leading, spacing: 12) {

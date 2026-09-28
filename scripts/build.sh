@@ -67,9 +67,9 @@ cat > "$stage/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>3.3.1</string>
+  <string>3.4.0</string>
   <key>CFBundleVersion</key>
-  <string>10</string>
+  <string>11</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>
