@@ -1,7 +1,36 @@
+```
+  ______             ____              _     _     ____
+ |__  /___ _ __ ___ |  _ \  _____   __| |   | |   / ___|
+   / // _ \ '__/ _ \| | | |/ _ \ \ / /| |   | |  | |
+  / /|  __/ | | (_) | |_| |  __/\ V / | |___| |__| |___
+ /____\___|_|  \___/|____/ \___| \_/  |_____|_____\____|
+                    ZeroDev LLC
+                      Mac Gaming Helper
+    https://ZeroDevLLC.com  ·  https://zerodevllc.store
+```
+
 # Mac Gaming Helper
 
-**Private repository.** Owner: [ZeroXSHDW](https://github.com/ZeroXSHDW).
+> **Private repository.** Owner: [ZeroXSHDW](https://github.com/ZeroXSHDW).
 
+**[Mac Gaming Helper](https://ZeroDevLLC.com)** by [ZeroDev LLC](https://ZeroDevLLC.com) · GitHub: [ZeroXSHDW/MacGamingHelper](https://github.com/ZeroXSHDW/MacGamingHelper)
+
+> Brand: **[https://ZeroDevLLC.com](https://ZeroDevLLC.com)** · Store: **[https://zerodevllc.store](https://zerodevllc.store)**  
+> Production releases → public-bound `MacGamingHelper`.  
+> Active development → private twin [`MacGamingHelper-dev`](https://github.com/ZeroXSHDW/MacGamingHelper-dev).
+
+
+## Screenshots
+
+![Banner](docs/screenshots/banner.png)
+
+![Controller Hero](docs/screenshots/controller-hero.png)
+
+![Pairing Usb](docs/screenshots/pairing-usb.png)
+
+![Pairing Bluetooth](docs/screenshots/pairing-bluetooth.png)
+
+---
 ## Standalone — no assistant required
 
 This repo and the app on this Mac are complete. You do **not** need any chat bot to run, rebuild, or update Mac Gaming Helper.
@@ -9,7 +38,7 @@ This repo and the app on this Mac are complete. You do **not** need any chat bot
 | What you need | Where |
 |---|---|
 | Run the app | `/Applications/Mac Gaming Helper.app` or Desktop **Start Mac Gaming Helper.command** |
-| Source | `~/Projects/MacGamingHelper` and https://github.com/ZeroXSHDW/MacGamingHelper |
+| Source | This repository: https://github.com/ZeroXSHDW/MacGamingHelper |
 | Latest download | https://github.com/ZeroXSHDW/MacGamingHelper/releases/latest |
 | Rebuild | `./scripts/install.sh` |
 | Permissions panes | `./scripts/open-permissions.sh` |
@@ -37,7 +66,7 @@ Live controller desk (Game Controller / `GCController`), DualShock-style layout,
 
 ## Relation to Game Bay
 
-This project **continues and improves** the local predecessor Game Bay (`~/Projects/game-bay` when present).
+This project **continues and improves** the earlier Game Bay prototype (local checkout when present; not required).
 
 - Game Bay is **not deleted**. Keep using it for Coach / library features if you like.
 - Mac Gaming Helper keeps the launcher hub (Steam, Heroic, GeForce NOW) and replaces the thin controller page with a DualShock 4–first desk: multi-pad selection, live diagram, stylized pad art, light bar, haptics test, pairing coach, and optional keyboard/mouse mapping.
