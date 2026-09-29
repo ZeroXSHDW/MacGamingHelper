@@ -1,7 +1,32 @@
+```
+  ______             ____              _     _     ____
+ |__  /___ _ __ ___ |  _ \  _____   __| |   | |   / ___|
+   / // _ \ '__/ _ \| | | |/ _ \ \ / /| |   | |  | |
+  / /|  __/ | | (_) | |_| |  __/\ V / | |___| |__| |___
+ /____\___|_|  \___/|____/ \___| \_/  |_____|_____\____|
+                    ZeroDev LLC
+             https://ZeroDevLLC.com
+```
+
 # Mac Gaming Helper
 
-**Private repository.** Owner: [ZeroXSHDW](https://github.com/ZeroXSHDW).
+**[Mac Gaming Helper](https://ZeroDevLLC.com)** by [ZeroDev LLC](https://ZeroDevLLC.com) · GitHub: [ZeroXSHDW/MacGamingHelper](https://github.com/ZeroXSHDW/MacGamingHelper)
 
+> Store / brand: **[https://ZeroDevLLC.com](https://ZeroDevLLC.com)**  
+> Production releases are published on the public-bound repo `MacGamingHelper`.  
+> Active development uses the private twin [`MacGamingHelper-dev`](https://github.com/ZeroXSHDW/MacGamingHelper-dev).
+
+## Screenshots
+
+![Banner](docs/screenshots/banner.png)
+
+![Controller Hero](docs/screenshots/controller-hero.png)
+
+![Pairing Usb](docs/screenshots/pairing-usb.png)
+
+![Pairing Bluetooth](docs/screenshots/pairing-bluetooth.png)
+
+---
 ## Standalone — no assistant required
 
 This repo and the app on this Mac are complete. You do **not** need any chat bot to run, rebuild, or update Mac Gaming Helper.
