@@ -55,4 +55,28 @@ enum ProfileStore {
     static func isPreset(_ id: String) -> Bool {
         MappingProfile.presets.contains { $0.id == id }
     }
+
+    /// JSON used by Export (no file written here).
+    static func exportData(_ profile: MappingProfile) -> Data? {
+        try? JSONEncoder().encode(profile)
+    }
+
+    /// Decode a profile from Import, give it a fresh name if requested, and
+    /// ensure its id never collides with a preset or an existing custom file.
+    static func importProfile(from data: Data, asName name: String?) -> MappingProfile? {
+        guard var profile = try? JSONDecoder().decode(MappingProfile.self, from: data) else {
+            return nil
+        }
+        if let name, !name.isEmpty {
+            profile.name = name
+        }
+        if isPreset(profile.id) {
+            profile.id = "custom-\(UUID().uuidString.prefix(8))"
+        }
+        if FileManager.default.fileExists(atPath: fileURL(for: profile.id).path) {
+            profile.id = "\(profile.id)-\(UUID().uuidString.prefix(6))"
+        }
+        try? save(profile)
+        return profile
+    }
 }

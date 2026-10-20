@@ -2,7 +2,7 @@ import SwiftUI
 
 enum Theme {
     static let name = "Mac Gaming Helper"
-    static let version = "3.4.1"
+    static let version = "3.15.0"
     static let accent = Color(red: 0.18, green: 0.55, blue: 0.95)
     static let ds4Blue = Color(red: 0.00, green: 0.48, blue: 0.90)
     static let card = Color(nsColor: .controlBackgroundColor)
@@ -23,7 +23,7 @@ enum Theme {
     /// Relates this app to the earlier Game Bay project.
     static let relationNote = """
     Successor to Game Bay (~/Projects/game-bay). Game Bay remains installed and unchanged. \
-    Mac Gaming Helper keeps the launcher hub and adds a DualShock 4–first controller desk \
+    Mac Gaming Helper keeps the launcher hub and adds a PlayStation-first controller desk \
     with live readouts, multi-pad selection, light-bar tint, pairing art, and optional keyboard/mouse mapping.
     """
 }

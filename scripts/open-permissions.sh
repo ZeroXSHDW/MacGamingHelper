@@ -13,14 +13,28 @@ echo "Then: open the app → menu bar → Show Performance Bar (or ⌃⌥⌘P)"
 echo
 
 open_url() {
-  open "$1" 2>/dev/null || true
-  sleep 0.8
+  # Try modern (Ventura+) pane URLs first, then the legacy scheme.
+  local path="$1"
+  for url in \
+    "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?$path" \
+    "x-apple.systempreferences:com.apple.preference.security?$path"
+  do
+    if open "$url" 2>/dev/null; then
+      sleep 0.8
+      return 0
+    fi
+  done
+  return 0
 }
 
-open_url "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
-open_url "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
-open_url "x-apple.systempreferences:com.apple.preference.notifications"
-open_url "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork"
+open_url "Privacy_Bluetooth"
+open_url "Privacy_Accessibility"
+open_url "Privacy_LocalNetwork"
+# Notifications is its own pane
+open "x-apple.systempreferences:com.apple.Notifications-Settings.extension" 2>/dev/null \
+  || open "x-apple.systempreferences:com.apple.preference.notifications" 2>/dev/null \
+  || true
+sleep 0.8
 
 APP="/Applications/Mac Gaming Helper.app"
 if [[ ! -d "$APP" ]]; then

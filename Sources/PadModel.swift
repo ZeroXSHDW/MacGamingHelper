@@ -60,6 +60,8 @@ struct ControllerSnapshot: Identifiable, Equatable {
     var homePressed: Bool
     var lightBarSupported: Bool
     var hapticsSupported: Bool
+    /// DualSense-only: adaptive trigger resistance is available through GameController.
+    var adaptiveTriggersSupported: Bool
     var playerIndex: Int
     var transport: PadTransport
     var preferenceKey: String
@@ -91,6 +93,7 @@ struct ControllerSnapshot: Identifiable, Equatable {
         homePressed: false,
         lightBarSupported: false,
         hapticsSupported: false,
+        adaptiveTriggersSupported: false,
         playerIndex: -1,
         transport: .unknown,
         preferenceKey: "",
@@ -161,12 +164,12 @@ struct MappingProfile: Codable, Equatable, Identifiable {
     var name: String
     var deadzone: Double
     var bindings: [MappingBinding]
-    var macro: MappingMacro
+    var macros: [MappingMacro]
 
-    enum CodingKeys: String, CodingKey { case id, name, deadzone, bindings, macro }
+    enum CodingKeys: String, CodingKey { case id, name, deadzone, bindings, macros, macro }
 
-    init(id: String, name: String, deadzone: Double, bindings: [MappingBinding], macro: MappingMacro = .off) {
-        self.id = id; self.name = name; self.deadzone = deadzone; self.bindings = bindings; self.macro = macro
+    init(id: String, name: String, deadzone: Double, bindings: [MappingBinding], macros: [MappingMacro] = [.off]) {
+        self.id = id; self.name = name; self.deadzone = deadzone; self.bindings = bindings; self.macros = macros
     }
 
     init(from decoder: Decoder) throws {
@@ -175,7 +178,22 @@ struct MappingProfile: Codable, Equatable, Identifiable {
         name = try c.decode(String.self, forKey: .name)
         deadzone = try c.decode(Double.self, forKey: .deadzone)
         bindings = try c.decode([MappingBinding].self, forKey: .bindings)
-        macro = try c.decodeIfPresent(MappingMacro.self, forKey: .macro) ?? .off
+        if let arr = try c.decodeIfPresent([MappingMacro].self, forKey: .macros) {
+            macros = arr
+        } else if let single = try c.decodeIfPresent(MappingMacro.self, forKey: .macro) {
+            macros = [single]
+        } else {
+            macros = [.off]
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(deadzone, forKey: .deadzone)
+        try c.encode(bindings, forKey: .bindings)
+        try c.encode(macros, forKey: .macros)
     }
 
     static let fpsWASD = MappingProfile(
@@ -203,7 +221,7 @@ struct MappingProfile: Codable, Equatable, Identifiable {
             .key("Left", code: 123, name: "←"),
             .key("Right", code: 124, name: "→"),
         ],
-        macro: .off
+        macros: [.off]
     )
 
     static let arrowsBrowse = MappingProfile(
@@ -224,7 +242,7 @@ struct MappingProfile: Codable, Equatable, Identifiable {
             .key("Options", code: 53, name: "Esc"),
             .key("Share", code: 48, name: "Tab"),
         ],
-        macro: .off
+        macros: [.off]
     )
 
     static let presets: [MappingProfile] = [.fpsWASD, .arrowsBrowse]
@@ -235,7 +253,7 @@ struct MappingProfile: Codable, Equatable, Identifiable {
             name: name,
             deadzone: deadzone,
             bindings: bindings,
-            macro: macro
+            macros: macros
         )
     }
 }

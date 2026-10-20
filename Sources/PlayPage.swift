@@ -194,6 +194,11 @@ struct PlayPage: View {
                 HStack {
                     Text("Heroic / Epic / GOG").font(.headline)
                     Spacer()
+                    if let heroicLauncher = launchers.items.first(where: { $0.id == "heroic" }), !heroicLauncher.isInstalled {
+                        PillButton(title: "Install Heroic", primary: true) {
+                            launchers.openInstallPage(heroicLauncher)
+                        }
+                    }
                     PillButton(title: "Refresh") { heroic.refresh() }
                 }
                 Text(heroic.note).font(.caption).foregroundStyle(Theme.mute)
@@ -204,7 +209,9 @@ struct PlayPage: View {
                             Text("\(game.store) · \(game.detail)").font(.caption2).foregroundStyle(Theme.mute).lineLimit(1)
                         }
                         Spacer()
-                        PillButton(title: "Open Heroic") {
+                        PillButton(title: "Launch", primary: true) {
+                            settings.gamingSessionActive = true
+                            settings.showOverlay = true
                             heroic.launch(game, launchers: launchers)
                         }
                     }

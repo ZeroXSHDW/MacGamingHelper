@@ -51,20 +51,22 @@ final class MenuBarController: ObservableObject {
     func refreshTitle() {
         guard let item, let monitor else { return }
         let snap = monitor.selected
+        let title: String
+        let tip: String
+        let tint: NSColor?
         if snap.connected {
             let bat = snap.batteryPercent.map { " \($0)%" } ?? ""
-            item.button?.title = " \(snap.kind.shortLabel)\(bat)"
-            item.button?.toolTip = "\(snap.title) · \(snap.transportLabel) · \(snap.battery)"
-            if let p = snap.batteryPercent {
-                item.button?.contentTintColor = batteryNSColor(p)
-            } else {
-                item.button?.contentTintColor = nil
-            }
+            title = " \(snap.kind.shortLabel)\(bat)"
+            tip = "\(snap.title) · \(snap.transportLabel) · \(snap.battery)"
+            tint = snap.batteryPercent.map { batteryNSColor($0) }
         } else {
-            item.button?.title = " —"
-            item.button?.toolTip = "No controller · click to open Mac Gaming Helper"
-            item.button?.contentTintColor = nil
+            title = " —"
+            tip = "No controller · click to open Mac Gaming Helper"
+            tint = nil
         }
+        if item.button?.title != title { item.button?.title = title }
+        if item.button?.toolTip != tip { item.button?.toolTip = tip }
+        if item.button?.contentTintColor != tint { item.button?.contentTintColor = tint }
     }
 
     private func batteryNSColor(_ p: Int) -> NSColor {
@@ -81,6 +83,7 @@ final class MenuBarController: ObservableObject {
         }
         add("Open Mac Gaming Helper", #selector(openMainWindow))
         add("Rediscover Controllers", #selector(rediscover))
+        add("Open Controller Page", #selector(openController))
         menu.addItem(.separator())
         let gaming = settings?.gamingSessionActive == true || settings?.showOverlay == true
         add(gaming ? "Stop gaming session" : "Start gaming", #selector(toggleGaming))
@@ -111,6 +114,10 @@ final class MenuBarController: ObservableObject {
     }
 
     @objc private func rediscover() { monitor?.rediscover() }
+    @objc private func openController() {
+        NotificationCenter.default.post(name: .mghGoPage, object: NavPage.controller.rawValue)
+        openMainWindow()
+    }
     @objc private func prepSteam() {
         if let mapper, let launchers {
             GameSession.prepSteamSession(mapper: mapper, launchers: launchers)

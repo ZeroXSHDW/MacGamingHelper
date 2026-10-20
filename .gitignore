@@ -1,4 +1,4 @@
-!scripts/
+# macOS / Xcode
 *.app
 *.swp
 *.xcuserstate
@@ -9,3 +9,13 @@ DerivedData/
 build/
 dist/
 xcuserdata/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Legacy archived scripts (not part of the public product)
+archive/
+
+# Standalone web demos (kept out of the app repository)
+demos/

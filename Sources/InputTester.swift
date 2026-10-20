@@ -48,7 +48,7 @@ struct InputTesterPage: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Live Input Tester")
                             .font(.largeTitle.weight(.bold))
-                        Text("Mash every DualShock control before a match. Stick trails + recent press log.")
+                        Text("Mash every PlayStation control before a match. Stick trails + recent press log.")
                             .foregroundStyle(Theme.mute)
                     }
                     Spacer()
@@ -100,7 +100,7 @@ struct InputTesterPage: View {
                     }
                 } else {
                     Card {
-                        Text("Connect a DualShock 4, then press buttons here to verify the pad.")
+                        Text("Connect a DualSense or DualShock 4, then press buttons here to verify the pad.")
                             .foregroundStyle(Theme.mute)
                     }
                     HeroPadArt(connected: false, maxHeight: 160)

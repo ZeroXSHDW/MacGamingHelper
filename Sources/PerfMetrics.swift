@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import Darwin
 import Foundation
 import IOKit
@@ -21,6 +22,8 @@ final class PerfSampler: ObservableObject {
         var panelHz: Int?
         var frontmostCPU: Double?
         var frontmostName: String
+        var thermalLabel: String
+        var thermalLevel: Int
         var sampledAt: Date
     }
 
@@ -28,8 +31,19 @@ final class PerfSampler: ObservableObject {
         cpuPercent: nil, memoryUsedGB: nil, memoryPressurePercent: nil,
         gpuPercent: nil, gpuAvailable: false, gpuNote: "unavailable",
         pingMs: nil, pingOK: false, panelHz: nil,
-        frontmostCPU: nil, frontmostName: "", sampledAt: .distantPast
+        frontmostCPU: nil, frontmostName: "",
+        thermalLabel: "—", thermalLevel: 0, sampledAt: .distantPast
     )
+
+    /// Rolling 60-sample history for the overlay sparklines (0 = unknown).
+    @Published private(set) var cpuHistory: [Double] = []
+    @Published private(set) var gpuHistory: [Double] = []
+
+    /// Per-core CPU load (percent) and the single hottest core.
+    @Published private(set) var coreLoads: [Double] = []
+    @Published private(set) var hottestCore: Double?
+
+    private var prevCores: [[UInt32]]?
 
     private var timer: Timer?
     private var prevCPU: (user: UInt32, system: UInt32, idle: UInt32, nice: UInt32)?
@@ -61,6 +75,8 @@ final class PerfSampler: ObservableObject {
         pingTask = nil
         frontmostTask?.cancel()
         frontmostTask = nil
+        cpuHistory = []
+        gpuHistory = []
     }
 
     func updatePingConfig(host: String, enabled: Bool) {
@@ -78,6 +94,10 @@ final class PerfSampler: ObservableObject {
     func sampleOnce() -> Snapshot {
         var s = snap
         s.cpuPercent = Self.finitePercent(Self.readCPU(&prevCPU))
+        if let cores = Self.readCoreLoads(&prevCores) {
+            coreLoads = cores
+            hottestCore = cores.max()
+        }
         let mem = Self.readMemory()
         s.memoryUsedGB = Self.finite(mem.usedGB, min: 0, max: 1024)
         s.memoryPressurePercent = Self.finitePercent(mem.pressure)
@@ -87,6 +107,9 @@ final class PerfSampler: ObservableObject {
         s.gpuAvailable = gpu.available && gpuPct != nil
         s.gpuNote = s.gpuAvailable ? gpu.note : (gpu.available ? "invalid reading" : gpu.note)
         s.panelHz = Self.readPanelHz()
+        let thermal = SystemPower.thermal()
+        s.thermalLabel = thermal.label
+        s.thermalLevel = thermal.level
         if active {
             s.frontmostCPU = Self.finite(frontmostCache.cpu, min: 0, max: 999)
             s.frontmostName = frontmostCache.name
@@ -124,9 +147,17 @@ final class PerfSampler: ObservableObject {
         finite(v, min: 0, max: 100)
     }
 
+    private func appendHistory(_ s: Snapshot) {
+        cpuHistory.append(s.cpuPercent ?? 0)
+        gpuHistory.append(s.gpuPercent ?? 0)
+        if cpuHistory.count > 60 { cpuHistory.removeFirst(cpuHistory.count - 60) }
+        if gpuHistory.count > 60 { gpuHistory.removeFirst(gpuHistory.count - 60) }
+    }
+
     private func tick() {
         guard active else { return }
         var s = sampleOnce()
+        appendHistory(s)
         if pingEnabled {
             // Ping at most every 2s to stay light
             if Date().timeIntervalSince(lastPingAt) >= 2.0 {
@@ -195,6 +226,51 @@ final class PerfSampler: ObservableObject {
         guard total > 0 else { return nil }
         let busy = (dUser + dSystem + dNice) / total * 100.0
         return min(100, max(0, busy))
+    }
+
+    /// Per-core CPU load (percent). Returns nil on the first sample while it
+    /// establishes a baseline.
+    private static func readCoreLoads(_ prev: inout [[UInt32]]?) -> [Double]? {
+        var numCPU: natural_t = 0
+        var info: processor_info_array_t?
+        var numCPUInfo: mach_msg_type_number_t = 0
+        let kr = host_processor_info(
+            mach_host_self(),
+            PROCESSOR_CPU_LOAD_INFO,
+            &numCPU,
+            &info,
+            &numCPUInfo
+        )
+        guard kr == KERN_SUCCESS, let info else { return nil }
+        defer {
+            let size = vm_size_t(numCPUInfo) * vm_size_t(MemoryLayout<integer_t>.stride)
+            vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info), size)
+        }
+
+        let loadCount = Int(CPU_STATE_MAX)
+        var busy: [UInt32] = []
+        var total: [UInt32] = []
+        for i in 0..<Int(numCPU) {
+            let base = i * loadCount
+            let user = UInt32(info[base + Int(CPU_STATE_USER)])
+            let system = UInt32(info[base + Int(CPU_STATE_SYSTEM)])
+            let nice = UInt32(info[base + Int(CPU_STATE_NICE)])
+            let idle = UInt32(info[base + Int(CPU_STATE_IDLE)])
+            busy.append(user &+ system &+ nice)
+            total.append(user &+ system &+ nice &+ idle)
+        }
+
+        defer { prev = [busy, total] }
+        guard let p = prev, p.count == 2, p[0].count == busy.count else { return nil }
+
+        var out: [Double] = []
+        out.reserveCapacity(busy.count)
+        for i in 0..<busy.count {
+            let dBusy = Double(busy[i] &- p[0][i])
+            let dTotal = Double(total[i] &- p[1][i])
+            out.append(dTotal > 0 ? min(100, max(0, dBusy / dTotal * 100.0)) : 0)
+        }
+        return out
     }
 
     // MARK: - Memory
@@ -273,6 +349,12 @@ final class PerfSampler: ObservableObject {
     // MARK: - Panel Hz (not game FPS)
 
     static func readPanelHz() -> Int? {
+        // Prefer the current display mode's refresh rate (can drop below max
+        // during a game); fall back to the screen's maximum frames per second.
+        if let mode = CGDisplayCopyDisplayMode(CGMainDisplayID()) {
+            let rate = mode.refreshRate
+            if rate > 0 { return Int(rate.rounded()) }
+        }
         guard let screen = NSScreen.main else { return nil }
         let hz = screen.maximumFramesPerSecond
         return hz > 0 ? hz : nil

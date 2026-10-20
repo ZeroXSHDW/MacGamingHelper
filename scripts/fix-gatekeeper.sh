@@ -13,5 +13,5 @@ echo "Clearing quarantine on: $APP"
 xattr -cr "$APP" || true
 find "$APP" -exec xattr -d com.apple.quarantine {} \; 2>/dev/null || true
 echo "Done. Opening…"
-open -a "$APP"
+open "$APP"
 echo "If macOS still blocks: Right-click the app → Open → Open."

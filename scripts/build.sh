@@ -35,14 +35,22 @@ if [[ -z "$sdk" || ! -d "$sdk" ]]; then
   exit 1
 fi
 echo "sdk $sdk"
+arch="$(uname -m)"
+target="$arch-apple-macosx14.0"
+echo "target $target"
 stage="$root/dist/Mac Gaming Helper.app"
 rm -rf "$stage"
 mkdir -p "$stage/Contents/MacOS" "$stage/Contents/Resources" "$root/build" "$root/Resources"
 
 # Generate stylized PNGs into Resources/
-swiftc -sdk "$sdk" -target arm64-apple-macosx14.0 -framework AppKit \
+swiftc -sdk "$sdk" -target "$target" -framework AppKit \
   -o "$root/build/make-assets" "$root/scripts/make-assets.swift"
 "$root/build/make-assets" "$root/Resources"
+
+# 3D README render (kept out of the app bundle)
+swiftc -sdk "$sdk" -target "$target" -framework AppKit \
+  -o "$root/build/make-3d-render" "$root/scripts/make-3d-render.swift"
+"$root/build/make-3d-render" "$root/build"
 
 # Marketing copies for README (optional, regenerated each build)
 mkdir -p "$root/docs/screenshots"
@@ -50,6 +58,7 @@ cp -f "$root/Resources/banner.png" "$root/docs/screenshots/banner.png"
 cp -f "$root/Resources/hero-pad-lit.png" "$root/docs/screenshots/controller-hero.png"
 cp -f "$root/Resources/coach-usb.png" "$root/docs/screenshots/pairing-usb.png"
 cp -f "$root/Resources/coach-bluetooth.png" "$root/docs/screenshots/pairing-bluetooth.png"
+cp -f "$root/build/app-3d.png" "$root/docs/screenshots/app-3d.png"
 
 cat > "$stage/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -67,15 +76,21 @@ cat > "$stage/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>3.4.1</string>
+  <string>3.15.0</string>
   <key>CFBundleVersion</key>
-  <string>12</string>
+  <string>26</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.games</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+  </array>
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSBluetoothAlwaysUsageDescription</key>
@@ -94,7 +109,7 @@ PLIST
 printf 'APPL????' > "$stage/Contents/PkgInfo"
 
 # Richer app icon from AppIcon-1024.png
-swiftc -sdk "$sdk" -target arm64-apple-macosx14.0 -framework AppKit \
+swiftc -sdk "$sdk" -target "$target" -framework AppKit \
   -o "$root/build/make-icon" "$root/scripts/make-icon.swift"
 "$root/build/make-icon" "$root/build/AppIcon.iconset" "$root/Resources/AppIcon-1024.png"
 iconutil -c icns "$root/build/AppIcon.iconset" -o "$stage/Contents/Resources/AppIcon.icns"
@@ -103,9 +118,10 @@ iconutil -c icns "$root/build/AppIcon.iconset" -o "$stage/Contents/Resources/App
 cp -f "$root/Resources/"*.png "$stage/Contents/Resources/"
 
 sources=("$root"/Sources/*.swift)
-swiftc -parse-as-library -O -sdk "$sdk" -target arm64-apple-macosx14.0 \
+swiftc -parse-as-library -O -sdk "$sdk" -target "$target" \
   -framework SwiftUI -framework AppKit -framework GameController -framework CoreHaptics \
   -framework ServiceManagement -framework UserNotifications -framework IOKit \
+  -framework IOBluetooth -framework Carbon \
   -o "$stage/Contents/MacOS/MacGamingHelper" \
   "${sources[@]}"
 codesign --force --sign - --entitlements "$root/scripts/entitlements.plist" "$stage" 2>/dev/null \

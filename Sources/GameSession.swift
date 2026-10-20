@@ -28,32 +28,36 @@ final class GameSession: ObservableObject {
 
     func refresh() {
         guard let app = NSWorkspace.shared.frontmostApplication else {
-            frontmost = .none
-            frontmostName = ""
-            steamInputHint = false
+            if frontmost != .none { frontmost = .none }
+            if !frontmostName.isEmpty { frontmostName = "" }
+            if steamInputHint { steamInputHint = false }
             return
         }
         let name = app.localizedName ?? ""
         let bundle = app.bundleIdentifier ?? ""
-        frontmostName = name
         let blob = "\(name) \(bundle)".lowercased()
+        let kind: FrontmostKind
+        let hint: Bool
         if blob.contains("geforce") || bundle.contains("nvidia") {
-            frontmost = .geforce
-            steamInputHint = false
+            kind = .geforce
+            hint = false
         } else if blob.contains("heroic") {
-            frontmost = .heroic
-            steamInputHint = false
+            kind = .heroic
+            hint = false
         } else if bundle == "com.valvesoftware.steam" || name == "Steam" {
-            frontmost = .steam
-            steamInputHint = true
+            kind = .steam
+            hint = true
         } else if blob.contains("steam") || bundle.contains("steam") {
             // Steam Helper / game often has steam in path or parent
-            frontmost = .steamGame
-            steamInputHint = true
+            kind = .steamGame
+            hint = true
         } else {
-            frontmost = .other
-            steamInputHint = false
+            kind = .other
+            hint = false
         }
+        if frontmostName != name { frontmostName = name }
+        if frontmost != kind { frontmost = kind }
+        if steamInputHint != hint { steamInputHint = hint }
     }
 
     struct PrepItem: Identifiable {
@@ -71,6 +75,7 @@ final class GameSession: ObservableObject {
             return true // unknown battery — don't fail hard
         }()
         let steam = launchers.items.first(where: { $0.id == "steam" })
+        let heroic = launchers.items.first(where: { $0.id == "heroic" })
         return [
             PrepItem(id: "pad", title: "Controller seen", ok: pad.connected,
                      detail: pad.connected ? "\(pad.kind.rawValue) · \(pad.transportLabel)" : "No pad — Pairing / Rediscover"),
@@ -80,8 +85,14 @@ final class GameSession: ObservableObject {
                      detail: mapper.enabled && !mapper.pausedByUser
                         ? "Mapping is LIVE/ARMED — pause for Steam games"
                         : "Good for Steam Input / Big Picture"),
-            PrepItem(id: "steam", title: "Steam installed", ok: steam?.isInstalled == true,
-                     detail: steam?.isInstalled == true ? "Ready" : "Install Steam for Big Picture"),
+            PrepItem(id: "steam", title: "Steam installed", ok: steam?.isInstalled == true && !SystemSupport.steamLaunchBlockedByRosetta,
+                     detail: steam?.isInstalled == true
+                        ? (SystemSupport.steamLaunchBlockedByRosetta ? "Needs Rosetta 2 — run softwareupdate --install-rosetta" : "Ready")
+                        : (steam?.isBroken == true ? "Failed download — reinstall Steam" : "Install Steam for Big Picture")),
+            PrepItem(id: "heroic", title: "Heroic installed (optional)", ok: heroic?.isInstalled == true,
+                     detail: heroic?.isInstalled == true
+                        ? "Epic / GOG ready"
+                        : (heroic?.isBroken == true ? "Failed download — use Install Heroic" : "Install Heroic for Epic / GOG")),
         ]
     }
 

@@ -96,11 +96,16 @@ final class SteamShelf: ObservableObject {
         let home = URL(fileURLWithPath: NSHomeDirectory())
         let steam = home.appendingPathComponent("Library/Application Support/Steam")
         var roots: [URL] = [steam]
-        let vdf = steam.appendingPathComponent("steamapps/libraryfolders.vdf")
-        if let text = try? String(contentsOf: vdf, encoding: .utf8) {
-            for path in SteamVDF.paths(in: text) {
-                let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
-                if !roots.contains(url) { roots.append(url) }
+        let vdfCandidates = [
+            steam.appendingPathComponent("steamapps/libraryfolders.vdf"),
+            steam.appendingPathComponent("config/libraryfolders.vdf"),
+        ]
+        for vdf in vdfCandidates {
+            if let text = try? String(contentsOf: vdf, encoding: .utf8) {
+                for path in SteamVDF.paths(in: text) {
+                    let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+                    if !roots.contains(url) { roots.append(url) }
+                }
             }
         }
         var list: [SteamGame] = []

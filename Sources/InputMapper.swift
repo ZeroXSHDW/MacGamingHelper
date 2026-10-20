@@ -2,20 +2,29 @@ import AppKit
 import ApplicationServices
 import Combine
 import Foundation
+import UniformTypeIdentifiers
 
 /// Optional DualShock → keyboard / mouse mapping for games that do not speak gamepads.
 @MainActor
 final class InputMapper: ObservableObject {
-    @Published var enabled = false
+    @Published var enabled = false {
+        didSet { updateActivity() }
+    }
     @Published var profile: MappingProfile = .fpsWASD
     @Published var profiles: [MappingProfile] = MappingProfile.presets
-    @Published var accessibilityTrusted = false
+    @Published var accessibilityTrusted = false {
+        didSet { updateActivity() }
+    }
     @Published var lastAction: String = "Mapping idle"
     @Published var stickThreshold: Double = 0.35
     /// True while actively posting CGEvents this frame.
     @Published var isLive = false
     /// User-paused via hotkey; distinct from enabled=false.
-    @Published var pausedByUser = false
+    @Published var pausedByUser = false {
+        didSet { updateActivity() }
+    }
+    @Published var frontmostAppName = ""
+    @Published var frontmostBundleID = ""
 
     private weak var monitor: ControllerMonitor?
     private var appObservers: [NSObjectProtocol] = []
@@ -25,12 +34,57 @@ final class InputMapper: ObservableObject {
     private var heldMouse = Set<Int64>()
     private var lastTouchpadX: Double?
     private var lastTouchpadY: Double?
-    private var macroFired = false
+    private var macroFired: Set<Int> = []
+    private var activityToken: NSObjectProtocol?
+    private var tickTimer: Timer?
+
+    /// Mapping runs while another app is frontmost. Without this activity
+    /// assertion macOS App Nap can throttle the controller timer and make
+    /// keys feel late; it allows normal idle sleep.
+    private func updateActivity() {
+        let shouldRun = enabled && !pausedByUser && accessibilityTrusted
+        if shouldRun {
+            if activityToken == nil {
+                activityToken = ProcessInfo.processInfo.beginActivity(
+                    options: .userInitiatedAllowingIdleSystemSleep,
+                    reason: "Game controller mapping"
+                )
+            }
+            startTickTimer()
+        } else {
+            if let token = activityToken {
+                ProcessInfo.processInfo.endActivity(token)
+                activityToken = nil
+            }
+            stopTickTimer()
+        }
+    }
+
+    /// Snapshots only publish when a value changes. Mouse/stick mapping needs
+    /// a steady tick even while the stick is held still, otherwise aim stops
+    /// moving until the stick moves again.
+    private func startTickTimer() {
+        guard tickTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        tickTimer = timer
+    }
+
+    private func stopTickTimer() {
+        tickTimer?.invalidate()
+        tickTimer = nil
+    }
 
     func bind(monitor: ControllerMonitor, settings: AppSettings) {
         self.monitor = monitor
         self.settings = settings
         accessibilityTrusted = AXIsProcessTrusted()
+        if let app = NSWorkspace.shared.frontmostApplication {
+            frontmostBundleID = app.bundleIdentifier ?? ""
+            frontmostAppName = app.localizedName ?? ""
+        }
         reloadProfiles()
         if let match = profiles.first(where: { $0.id == settings.activeProfileID }) {
             profile = match
@@ -49,15 +103,140 @@ final class InputMapper: ObservableObject {
         let center = NotificationCenter.default
         appObservers.append(center.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.settings?.pauseMappingWhenInactive == true else { return }
-                if self.enabled && !self.pausedByUser {
+                guard let self, self.enabled else { return }
+                // Never leave keys/mouse held while another app is frontmost.
+                self.releaseAll()
+                self.isLive = false
+                if self.settings?.pauseMappingWhenInactive == true, !self.pausedByUser {
                     self.pausedByUser = true
-                    self.releaseAll()
-                    self.isLive = false
                     self.lastAction = "Auto-paused — app inactive (⌥⌘M to resume)"
                 }
             }
         })
+        appObservers.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            Task { @MainActor in self?.handleFrontmostChange(note) }
+        })
+    }
+
+    private func handleFrontmostChange(_ note: Notification) {
+        guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              let bundleID = app.bundleIdentifier else { return }
+        frontmostBundleID = bundleID
+        frontmostAppName = app.localizedName ?? bundleID
+        guard bundleID != Bundle.main.bundleIdentifier else { return }
+        applyGameProfile(for: bundleID)
+    }
+
+    private func applyGameProfile(for bundleID: String) {
+        guard let settings, let gp = settings.gameProfiles[bundleID] else { return }
+
+        if let pid = gp.mappingProfileID,
+           let target = profiles.first(where: { $0.id == pid }),
+           target.id != profile.id {
+            selectPreset(target)
+            lastAction = "Auto-switched to “\(target.name)” for \(gp.name.isEmpty ? bundleID : gp.name)"
+        }
+        if gp.autoEnableMapping, accessibilityTrusted {
+            if pausedByUser { pausedByUser = false }
+            if !enabled { enabled = true }
+        }
+        if gp.showOverlay != settings.showOverlay {
+            settings.showOverlay = gp.showOverlay
+        }
+        if gp.overlayMode != settings.overlayMode {
+            settings.overlayMode = gp.overlayMode
+        }
+        if gp.keepAwake, !settings.gamingSessionActive {
+            settings.gamingSessionActive = true
+        }
+        if gp.pauseMapping, enabled, !pausedByUser {
+            pauseForSteamSession()
+        }
+    }
+
+    // MARK: Per-app profile management
+
+    var runningApps: [(bundleID: String, name: String)] {
+        var uniq: [String: String] = [:]
+        for app in NSWorkspace.shared.runningApplications {
+            guard app.activationPolicy == .regular,
+                  let id = app.bundleIdentifier,
+                  id != Bundle.main.bundleIdentifier,
+                  uniq[id] == nil else { continue }
+            uniq[id] = app.localizedName ?? id
+        }
+        return uniq.map { (bundleID: $0.key, name: $0.value) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    var savedGameProfiles: [GameProfile] {
+        guard let settings else { return [] }
+        return settings.gameProfiles.values.sorted {
+            $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+        }
+    }
+
+    func gameProfile(for bundleID: String) -> GameProfile? {
+        settings?.gameProfiles[bundleID]
+    }
+
+    func rememberGameProfile(
+        bundleID: String,
+        name: String,
+        mappingProfileID: String?,
+        autoEnableMapping: Bool,
+        overlayMode: OverlayMode,
+        showOverlay: Bool,
+        keepAwake: Bool,
+        pauseMapping: Bool
+    ) {
+        guard !bundleID.isEmpty, let settings else { return }
+        var gp = GameProfile.make(bundleID: bundleID, name: name, mappingProfileID: mappingProfileID)
+        gp.autoEnableMapping = autoEnableMapping
+        gp.overlayMode = overlayMode
+        gp.showOverlay = showOverlay
+        gp.keepAwake = keepAwake
+        gp.pauseMapping = pauseMapping
+        settings.gameProfiles[bundleID] = gp
+        let pname = profiles.first(where: { $0.id == mappingProfileID })?.name ?? "no mapping"
+        lastAction = "Saved game profile for \(name) (\(pname))"
+    }
+
+    func forgetGameProfile(bundleID: String) {
+        settings?.gameProfiles.removeValue(forKey: bundleID)
+    }
+
+    // MARK: Profile import / export
+
+    @discardableResult
+    func exportActiveProfile() -> URL? {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "\(profile.name).json"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url,
+              let data = ProfileStore.exportData(profile) else { return nil }
+        try? data.write(to: url, options: .atomic)
+        lastAction = "Exported “\(profile.name)”"
+        return url
+    }
+
+    func importProfileFromFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url,
+              let data = try? Data(contentsOf: url) else { return }
+        guard let imported = ProfileStore.importProfile(
+            from: data,
+            asName: url.deletingPathExtension().lastPathComponent
+        ) else {
+            lastAction = "Import failed — not a Mac Gaming Helper profile."
+            return
+        }
+        reloadProfiles()
+        selectPreset(imported)
+        lastAction = "Imported “\(imported.name)”"
     }
 
     /// Sticky pause for Start gaming / Steam — does not toggle; no-op if Mapping off.
@@ -88,8 +267,22 @@ final class InputMapper: ObservableObject {
         }
     }
 
-    func updateMacro(_ macro: MappingMacro) {
-        profile.macro = macro
+    func updateMacros(_ macros: [MappingMacro]) {
+        profile.macros = macros
+        objectWillChange.send()
+    }
+
+    func addMacro() {
+        var m = MappingMacro.off
+        m.enabled = true
+        m.keyName = "E"
+        profile.macros.append(m)
+        objectWillChange.send()
+    }
+
+    func removeMacro(at index: Int) {
+        guard profile.macros.indices.contains(index) else { return }
+        profile.macros.remove(at: index)
         objectWillChange.send()
     }
 
@@ -199,24 +392,26 @@ final class InputMapper: ObservableObject {
     private func tick() {
         guard enabled else {
             releaseAll()
-            isLive = false
+            if isLive { isLive = false }
             lastTouchpadX = nil
             lastTouchpadY = nil
             return
         }
         if pausedByUser {
             releaseAll()
-            isLive = false
+            if isLive { isLive = false }
             return
         }
         guard accessibilityTrusted else {
-            lastAction = "Enable Accessibility for Mac Gaming Helper to map keys/mouse."
-            isLive = false
+            let note = "Enable Accessibility for Mac Gaming Helper to map keys/mouse."
+            if lastAction != note { lastAction = note }
+            if isLive { isLive = false }
             return
         }
         guard let snap = monitor?.selected, snap.connected else {
             releaseAll()
-            lastAction = "No controller — mapping paused"
+            let note = "No controller — mapping paused"
+            if lastAction != note { lastAction = note }
             return
         }
 
@@ -262,20 +457,15 @@ final class InputMapper: ObservableObject {
             }
         }
 
-        // Simple combo macro: hold + tap → key (one slot)
-        let macro = profile.macro
-        if macro.enabled {
+        // Combo macros: hold + tap → key (one or more slots)
+        for (index, macro) in profile.macros.enumerated() where macro.enabled {
             let hold = isActive(control: macro.holdControl, snap: snap, deadzone: dz, stickThreshold: thresh, triggerDeadzone: trigDZ)
             let tap = isActive(control: macro.tapControl, snap: snap, deadzone: dz, stickThreshold: thresh, triggerDeadzone: trigDZ)
             if hold && tap {
-                if !macroFired {
-                    wantKeys.insert(macro.keyCode)
-                    macroFired = true
-                } else {
-                    wantKeys.insert(macro.keyCode)
-                }
+                wantKeys.insert(macro.keyCode)
+                macroFired.insert(index)
             } else {
-                macroFired = false
+                macroFired.remove(index)
             }
         }
 
@@ -324,14 +514,15 @@ final class InputMapper: ObservableObject {
         heldMouse = wantMouse
 
         let live = !wantKeys.isEmpty || !wantMouse.isEmpty || abs(mouseDX) > 0.01 || abs(mouseDY) > 0.01
-        isLive = live
+        if isLive != live { isLive = live }
         if abs(mouseDX) > 0.01 || abs(mouseDY) > 0.01 {
             postMouseMove(dx: mouseDX, dy: mouseDY)
             lastAction = String(format: "LIVE mouse Δ %.1f, %.1f · keys %d", mouseDX, mouseDY, wantKeys.count)
         } else if !wantKeys.isEmpty || !wantMouse.isEmpty {
             lastAction = "LIVE: \(snap.buttons.joined(separator: " "))"
         } else {
-            lastAction = "Mapping armed — waiting for input"
+            let note = "Mapping armed — waiting for input"
+            if lastAction != note { lastAction = note }
         }
     }
 
@@ -360,7 +551,7 @@ final class InputMapper: ObservableObject {
         case "Left": return snap.buttons.contains("Left")
         case "Right": return snap.buttons.contains("Right")
         case "Options", "Menu": return snap.buttons.contains("Options") || snap.buttons.contains("Menu")
-        case "Share", "View": return snap.buttons.contains("Share") || snap.buttons.contains("View")
+        case "Share", "View", "Create": return snap.buttons.contains("Share") || snap.buttons.contains("View") || snap.buttons.contains("Create")
         case "Touchpad": return snap.touchpadPressed || snap.buttons.contains("Touchpad")
         case "PS", "Home": return snap.homePressed || snap.buttons.contains("PS") || snap.buttons.contains("Home")
         case "LeftStickUp": return snap.ly > stickThreshold

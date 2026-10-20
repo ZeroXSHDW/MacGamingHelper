@@ -7,6 +7,13 @@ struct MappingPage: View {
     @EnvironmentObject private var settings: AppSettings
     @State private var newProfileName = "My profile"
     @State private var editControl: String = "Cross"
+    @State private var selectedAppBundle = ""
+    @State private var selectedProfileID = ""
+    @State private var selectedOverlayMode: OverlayMode = .performance
+    @State private var selectedShowOverlay = true
+    @State private var selectedKeepAwake = false
+    @State private var selectedAutoEnableMapping = false
+    @State private var selectedPauseMapping = false
 
     private let editableControls = [
         "Cross", "Circle", "Square", "Triangle",
@@ -23,7 +30,7 @@ struct MappingPage: View {
                         Text("Keyboard & mouse mapping")
                             .font(.largeTitle.weight(.bold))
                             .tracking(-0.4)
-                        Text("Optional path for games that ignore DualShock 4. Maps the selected pad to keys and mouse. Offline, no accounts.")
+                        Text("Optional path for games that ignore a gamepad. Maps the selected pad to keys and mouse. Offline, no accounts.")
                             .foregroundStyle(Theme.mute)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -146,57 +153,39 @@ struct MappingPage: View {
 
                 Card {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Combo macro (one slot)")
+                        Text("Combo macros")
                             .font(.headline)
-                        Toggle("Enable macro", isOn: Binding(
-                            get: { mapper.profile.macro.enabled },
-                            set: { on in
-                                mapper.profile.macro.enabled = on
-                            }
-                        ))
-                        HStack {
-                            Text("Hold")
-                            Picker("", selection: Binding(
-                                get: { mapper.profile.macro.holdControl },
-                                set: { mapper.profile.macro.holdControl = $0 }
-                            )) {
-                                ForEach(["L1", "R1", "L2", "R2"], id: \.self) { Text($0).tag($0) }
-                            }
-                            .frame(width: 80)
-                            Text("+ Tap")
-                            Picker("", selection: Binding(
-                                get: { mapper.profile.macro.tapControl },
-                                set: { mapper.profile.macro.tapControl = $0 }
-                            )) {
-                                ForEach(["Square", "Cross", "Circle", "Triangle", "Share", "Options"], id: \.self) { Text($0).tag($0) }
-                            }
-                            .frame(width: 100)
-                            Text("→")
-                            Picker("", selection: Binding(
-                                get: { mapper.profile.macro.keyCode },
-                                set: { code in
-                                    mapper.profile.macro.keyCode = code
-                                    mapper.profile.macro.keyName = KeyChoices.options.first(where: { $0.code == code })?.name ?? "Key"
-                                }
-                            )) {
-                                ForEach(KeyChoices.options, id: \.code) { Text($0.name).tag($0.code) }
-                            }
-                            .frame(width: 90)
-                        }
-                        Text("Example: hold L1 + Square → E. Save custom profiles to keep the macro.")
+                        Text("Hold a button + tap another to fire a key — for example L1 + Square → E. Add as many slots as you need.")
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
-                        if !ProfileStore.isPreset(mapper.profile.id) {
-                            PillButton(title: "Save profile with macro", primary: true) { mapper.saveCurrentProfile() }
+                        if mapper.profile.macros.isEmpty {
+                            Text("No macros. Tap “Add macro” to create one.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.mute)
+                        } else {
+                            ForEach(Array(mapper.profile.macros.enumerated()), id: \.offset) { index, _ in
+                                macroRow(index)
+                            }
+                        }
+                        HStack(spacing: 10) {
+                            PillButton(title: "Add macro", primary: true) { mapper.addMacro() }
+                            if !ProfileStore.isPreset(mapper.profile.id) {
+                                PillButton(title: "Save profile with macros") { mapper.saveCurrentProfile() }
+                            }
                         }
                     }
                 }
 
                 Card {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Profiles")
-                            .font(.headline)
-                        Text("⌘⌥1 / ⌘⌥2 / ⌘⌥3 switch the first three profiles.")
+                        HStack {
+                            Text("Profiles")
+                                .font(.headline)
+                            Spacer()
+                            PillButton(title: "Import…") { mapper.importProfileFromFile() }
+                            PillButton(title: "Export…") { mapper.exportActiveProfile() }
+                        }
+                        Text("⌘⌥1 / ⌘⌥2 / ⌘⌥3 switch the first three profiles. Export saves a JSON file; Import adds it back.")
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
                         ForEach(mapper.profiles) { preset in
@@ -232,6 +221,108 @@ struct MappingPage: View {
                                 PillButton(title: "Save") { mapper.saveCurrentProfile() }
                                 PillButton(title: "Delete", role: .destructive) { mapper.deleteCurrentIfCustom() }
                             }
+                        }
+                    }
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Game profiles (per-app)")
+                            .font(.headline)
+                        Text("When a saved app becomes the active window, Mac Gaming Helper applies its mapping, overlay and keep-awake settings automatically.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                        if !mapper.frontmostAppName.isEmpty {
+                            Text("Frontmost now: \(mapper.frontmostAppName)")
+                                .font(.caption)
+                                .foregroundStyle(Theme.ds4Blue)
+                        }
+
+                        HStack(spacing: 8) {
+                            Picker("App", selection: $selectedAppBundle) {
+                                if mapper.runningApps.isEmpty {
+                                    Text("No running apps").tag("")
+                                } else {
+                                    ForEach(mapper.runningApps, id: \.bundleID) { app in
+                                        Text(app.name).tag(app.bundleID)
+                                    }
+                                }
+                            }
+                            .frame(maxWidth: 220)
+                            Picker("Mapping", selection: $selectedProfileID) {
+                                Text("No mapping").tag("")
+                                ForEach(mapper.profiles) { p in
+                                    Text(p.name).tag(p.id)
+                                }
+                            }
+                            .frame(maxWidth: 200)
+                        }
+
+                        Picker("Overlay", selection: $selectedOverlayMode) {
+                            ForEach(OverlayMode.allCases) { Text($0.title).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+
+                        Toggle("Show overlay", isOn: $selectedShowOverlay)
+                        Toggle("Keep display awake", isOn: $selectedKeepAwake)
+                        Toggle("Auto-enable Mapping", isOn: $selectedAutoEnableMapping)
+                        Toggle("Pause Mapping (Steam Input)", isOn: $selectedPauseMapping)
+
+                        HStack(spacing: 10) {
+                            PillButton(title: "Save for this app", primary: true) {
+                                let name = mapper.runningApps.first(where: { $0.bundleID == selectedAppBundle })?.name ?? selectedAppBundle
+                                mapper.rememberGameProfile(
+                                    bundleID: selectedAppBundle,
+                                    name: name,
+                                    mappingProfileID: selectedProfileID.isEmpty ? nil : selectedProfileID,
+                                    autoEnableMapping: selectedAutoEnableMapping,
+                                    overlayMode: selectedOverlayMode,
+                                    showOverlay: selectedShowOverlay,
+                                    keepAwake: selectedKeepAwake,
+                                    pauseMapping: selectedPauseMapping
+                                )
+                            }
+                            .disabled(selectedAppBundle.isEmpty)
+                            if mapper.gameProfile(for: selectedAppBundle) != nil {
+                                Text("Editing existing profile")
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.mute)
+                            }
+                        }
+
+                        if !mapper.savedGameProfiles.isEmpty {
+                            Divider()
+                            Text("Saved")
+                                .font(.subheadline.weight(.semibold))
+                            ForEach(mapper.savedGameProfiles) { gp in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(gp.name.isEmpty ? gp.bundleID : gp.name)
+                                            .font(.callout.weight(.semibold))
+                                        Text(gp.bundleID)
+                                            .font(.caption2.monospaced())
+                                            .foregroundStyle(Theme.mute)
+                                        HStack(spacing: 6) {
+                                            if let pid = gp.mappingProfileID {
+                                                StatusChip(text: shortProfileName(pid), color: Theme.accent)
+                                            }
+                                            StatusChip(text: gp.overlayMode == .performance ? "Perf" : "HUD", color: gp.showOverlay ? Theme.good : Theme.mute)
+                                            if gp.keepAwake { StatusChip(text: "Awake", color: Theme.accent) }
+                                            if gp.autoEnableMapping { StatusChip(text: "Auto-map", color: Theme.good) }
+                                            if gp.pauseMapping { StatusChip(text: "Pause", color: Theme.warn) }
+                                        }
+                                    }
+                                    Spacer()
+                                    PillButton(title: "Remove", role: .destructive) {
+                                        mapper.forgetGameProfile(bundleID: gp.bundleID)
+                                    }
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        } else {
+                            Text("No app profiles yet. Pick a running app, choose its settings, then Save.")
+                                .font(.caption)
+                                .foregroundStyle(Theme.mute)
                         }
                     }
                 }
@@ -293,7 +384,7 @@ struct MappingPage: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Permissions")
                             .font(.headline)
-                        Text("• Bluetooth — pair the DualShock 4 in System Settings.")
+                        Text("• Bluetooth — pair the DualSense / DualShock 4 in System Settings.")
                         Text("• Accessibility — required only when keyboard/mouse mapping is enabled (this app posts CGEvents).")
                         Text("• Input Monitoring — usually not required for Game Controller readouts; grant if macOS prompts.")
                         Text("Steam Input is still preferred for Steam games; use mapping for non-gamepad titles.")
@@ -306,6 +397,71 @@ struct MappingPage: View {
         }
         .background(Theme.heroGradient.opacity(0.2))
         .onAppear { mapper.reloadProfiles() }
+        .onChange(of: selectedAppBundle) { _, _ in loadSelectedProfile() }
+    }
+
+    private func loadSelectedProfile() {
+        guard !selectedAppBundle.isEmpty, let gp = mapper.gameProfile(for: selectedAppBundle) else {
+            selectedProfileID = ""
+            selectedOverlayMode = .performance
+            selectedShowOverlay = true
+            selectedKeepAwake = false
+            selectedAutoEnableMapping = false
+            selectedPauseMapping = false
+            return
+        }
+        selectedProfileID = gp.mappingProfileID ?? ""
+        selectedOverlayMode = gp.overlayMode
+        selectedShowOverlay = gp.showOverlay
+        selectedKeepAwake = gp.keepAwake
+        selectedAutoEnableMapping = gp.autoEnableMapping
+        selectedPauseMapping = gp.pauseMapping
+    }
+
+    private func shortProfileName(_ id: String) -> String {
+        let name = mapper.profiles.first(where: { $0.id == id })?.name ?? id
+        return name.count > 18 ? String(name.prefix(17)) + "…" : name
+    }
+
+    @ViewBuilder
+    private func macroRow(_ index: Int) -> some View {
+        HStack(spacing: 6) {
+            Toggle("", isOn: Binding(
+                get: { mapper.profile.macros[index].enabled },
+                set: { mapper.profile.macros[index].enabled = $0 }
+            ))
+            .labelsHidden()
+            Picker("", selection: Binding(
+                get: { mapper.profile.macros[index].holdControl },
+                set: { mapper.profile.macros[index].holdControl = $0 }
+            )) {
+                ForEach(["L1", "R1", "L2", "R2"], id: \.self) { Text($0).tag($0) }
+            }
+            .frame(width: 70)
+            Text("+").foregroundStyle(Theme.mute)
+            Picker("", selection: Binding(
+                get: { mapper.profile.macros[index].tapControl },
+                set: { mapper.profile.macros[index].tapControl = $0 }
+            )) {
+                ForEach(["Square", "Cross", "Circle", "Triangle", "Share", "Options", "Create"], id: \.self) { Text($0).tag($0) }
+            }
+            .frame(width: 100)
+            Text("→").foregroundStyle(Theme.mute)
+            Picker("", selection: Binding(
+                get: { mapper.profile.macros[index].keyCode },
+                set: { code in
+                    mapper.profile.macros[index].keyCode = code
+                    mapper.profile.macros[index].keyName = KeyChoices.options.first(where: { $0.code == code })?.name ?? "Key"
+                }
+            )) {
+                ForEach(KeyChoices.options, id: \.code) { Text($0.name).tag($0.code) }
+            }
+            .frame(width: 90)
+            Spacer()
+            PillButton(title: "Remove", role: .destructive) {
+                mapper.removeMacro(at: index)
+            }
+        }
     }
 
     private func label(for b: MappingBinding) -> String {

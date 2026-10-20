@@ -56,12 +56,25 @@ final class AppSettings: ObservableObject {
         static let metricPing = "settings.metricPing"
         static let metricMapping = "settings.metricMapping"
         static let metricAwake = "settings.metricAwake"
+        static let metricThermal = "settings.metricThermal"
+        static let metricTime = "settings.metricTime"
+        static let metricCores = "settings.metricCores"
+        static let hapticIntensity = "settings.hapticIntensity"
         static let loginStartGaming = "settings.loginStartGaming"
         static let keepInDock = "settings.keepInDock"
+        static let appProfiles = "settings.appProfiles"
+        static let autoEnableMappingOnApp = "settings.autoEnableMappingOnApp"
+        static let gameProfiles = "settings.gameProfiles"
     }
 
     @Published var showMenuBar: Bool {
-        didSet { d.set(showMenuBar, forKey: Key.showMenuBar) }
+        didSet {
+            d.set(showMenuBar, forKey: Key.showMenuBar)
+            // Never end up with no Dock icon and no menu bar item.
+            if !showMenuBar && !keepInDock {
+                NSApp.setActivationPolicy(.regular)
+            }
+        }
     }
     @Published var startMinimizedToMenuBar: Bool {
         didSet { d.set(startMinimizedToMenuBar, forKey: Key.startMinimized) }
@@ -157,6 +170,15 @@ final class AppSettings: ObservableObject {
     }
     @Published var metricMapping: Bool { didSet { d.set(metricMapping, forKey: Key.metricMapping) } }
     @Published var metricAwake: Bool { didSet { d.set(metricAwake, forKey: Key.metricAwake) } }
+    @Published var metricThermal: Bool { didSet { d.set(metricThermal, forKey: Key.metricThermal) } }
+    @Published var metricTime: Bool { didSet { d.set(metricTime, forKey: Key.metricTime) } }
+    @Published var metricCores: Bool { didSet { d.set(metricCores, forKey: Key.metricCores) } }
+    /// Haptic strength and DualSense adaptive-trigger resistance (0.3–1.0).
+    @Published var hapticIntensity: Double {
+        didSet { d.set(hapticIntensity, forKey: Key.hapticIntensity) }
+    }
+    /// Runtime-only (not persisted): when the current gaming session started.
+    @Published var sessionStartedAt: Date?
 
     var effectiveOverlayVisible: Bool { showOverlay }
     @Published var stickCurve: StickCurve {
@@ -202,7 +224,17 @@ final class AppSettings: ObservableObject {
     @Published var keepInDock: Bool {
         didSet {
             d.set(keepInDock, forKey: Key.keepInDock)
-            NSApp.setActivationPolicy(keepInDock ? .regular : .regular)
+            let accessory = !keepInDock && showMenuBar
+            NSApp.setActivationPolicy(accessory ? .accessory : .regular)
+        }
+    }
+    /// Per-app gaming profiles: bundle identifier → full profile (mapping,
+    /// overlay, keep-awake). Migrated from the legacy appProfiles dictionary.
+    @Published var gameProfiles: [String: GameProfile] {
+        didSet {
+            if let data = try? JSONEncoder().encode(gameProfiles) {
+                d.set(data, forKey: Key.gameProfiles)
+            }
         }
     }
     @Published var launchAtLoginEnabled: Bool = false
@@ -221,7 +253,7 @@ final class AppSettings: ObservableObject {
         didShowWelcome = d.bool(forKey: Key.didWelcome)
         activeProfileID = d.string(forKey: Key.activeProfileID) ?? MappingProfile.fpsWASD.id
         lastTab = d.string(forKey: Key.lastTab) ?? NavPage.play.rawValue
-        pauseMappingWhenInactive = d.object(forKey: Key.pauseMappingInactive) as? Bool ?? true
+        pauseMappingWhenInactive = d.object(forKey: Key.pauseMappingInactive) as? Bool ?? false
         focusModeController = d.bool(forKey: Key.focusMode)
         preferredPadKey = d.string(forKey: Key.preferredPadKey) ?? ""
         // Overlay: migrate legacy showPlayHUD; new installs default Overlay ON (Performance Bar)
@@ -256,6 +288,11 @@ final class AppSettings: ObservableObject {
         metricPing = d.object(forKey: Key.metricPing) as? Bool ?? true
         metricMapping = d.object(forKey: Key.metricMapping) as? Bool ?? true
         metricAwake = d.object(forKey: Key.metricAwake) as? Bool ?? true
+        metricThermal = d.object(forKey: Key.metricThermal) as? Bool ?? true
+        metricTime = d.object(forKey: Key.metricTime) as? Bool ?? true
+        metricCores = d.object(forKey: Key.metricCores) as? Bool ?? true
+        sessionStartedAt = nil
+        hapticIntensity = d.object(forKey: Key.hapticIntensity) as? Double ?? 0.7
         if let raw = d.string(forKey: Key.stickCurve), let c = StickCurve(rawValue: raw) {
             stickCurve = c
         } else {
@@ -272,8 +309,26 @@ final class AppSettings: ObservableObject {
         audioTesterBeeps = d.bool(forKey: Key.audioTester)
         loginStartGaming = d.bool(forKey: Key.loginStartGaming)
         keepInDock = d.object(forKey: Key.keepInDock) as? Bool ?? true
+        gameProfiles = Self.loadGameProfiles(d)
         refreshLoginItemState()
         syncKeepAwake()
+    }
+
+    private static func loadGameProfiles(_ d: UserDefaults) -> [String: GameProfile] {
+        if let data = d.data(forKey: Key.gameProfiles),
+           let decoded = try? JSONDecoder().decode([String: GameProfile].self, from: data) {
+            return decoded
+        }
+        // Migrate legacy per-app mapping (settings.appProfiles) into full profiles.
+        let legacy = d.dictionary(forKey: Key.appProfiles) as? [String: String] ?? [:]
+        let legacyAuto = d.object(forKey: Key.autoEnableMappingOnApp) as? Bool ?? false
+        var migrated: [String: GameProfile] = [:]
+        for (bundleID, profileID) in legacy {
+            var gp = GameProfile.make(bundleID: bundleID, name: bundleID, mappingProfileID: profileID)
+            gp.autoEnableMapping = legacyAuto
+            migrated[bundleID] = gp
+        }
+        return migrated
     }
 
     func syncKeepAwake() {

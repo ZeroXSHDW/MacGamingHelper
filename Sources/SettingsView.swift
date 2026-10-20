@@ -8,6 +8,7 @@ struct SettingsPage: View {
     @State private var updateInfo: UpdateInfo?
     @State private var checkingUpdate = false
     @StateObject private var perms = PermissionStatusModel()
+    @StateObject private var power = PowerMonitor.shared
 
     var body: some View {
         ScrollView {
@@ -37,7 +38,12 @@ struct SettingsPage: View {
                         Toggle("Open Pairing coach when no pad is connected", isOn: $settings.openPairingOnEmpty)
                         Toggle("Low-battery alerts (≤20%)", isOn: $settings.lowBatteryAlerts)
                         Toggle("Auto-pause Mapping when app is inactive", isOn: $settings.pauseMappingWhenInactive)
+                        Text("Off by default: Mapping keeps working in the game. Held keys are always released when you switch apps, so nothing sticks.")
+                            .font(.caption).foregroundStyle(Theme.mute)
                         Toggle("Focus mode (Controller-first)", isOn: $settings.focusModeController)
+                        labeledSlider("Haptic & trigger intensity", value: $settings.hapticIntensity, range: 0.3...1.0)
+                        Text("Controls rumble strength and DualSense adaptive-trigger resistance.")
+                            .font(.caption).foregroundStyle(Theme.mute)
 
                         Divider()
                         Text("Dock & Login")
@@ -220,6 +226,9 @@ struct SettingsPage: View {
                         Toggle("Ping", isOn: $settings.metricPing)
                         Toggle("Mapping state", isOn: $settings.metricMapping)
                         Toggle("Keep-awake", isOn: $settings.metricAwake)
+                        Toggle("Thermal", isOn: $settings.metricThermal)
+                        Toggle("Session time", isOn: $settings.metricTime)
+                        Toggle("Hottest core", isOn: $settings.metricCores)
                         Divider()
                         Toggle("Ping enabled", isOn: $settings.pingEnabled)
                         HStack {
@@ -234,6 +243,59 @@ struct SettingsPage: View {
                         Text("Hotkey: ⌃⌥⌘P toggles overlay · right-click bar for mode/position.")
                             .font(.caption)
                             .foregroundStyle(Theme.mute)
+                    }
+                }
+
+                Card {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Power & performance")
+                                .font(.headline)
+                            Spacer()
+                            PillButton(title: power.checking ? "Checking…" : "Check") { power.refresh() }
+                        }
+                        if let st = power.status {
+                            HStack(spacing: 8) {
+                                StatusChip(
+                                    text: st.mode == .lowPower ? "Low Power Mode" : st.mode.rawValue,
+                                    color: st.mode == .lowPower ? Theme.warn : (st.mode == .highPower ? Theme.good : Theme.mute)
+                                )
+                                StatusChip(
+                                    text: "Thermal \(st.thermalLabel)",
+                                    color: OverlayStyle.thermal(st.thermalLevel)
+                                )
+                            }
+                            if st.mode == .lowPower {
+                                Text("Low Power Mode caps CPU/GPU to save battery — turn it off for the best gaming performance.")
+                                    .font(.callout)
+                                    .foregroundStyle(Theme.warn)
+                            } else if st.mode == .highPower {
+                                Text("High Power Mode is on — fans run earlier so sustained performance stays higher.")
+                                    .font(.callout)
+                                    .foregroundStyle(Theme.good)
+                            } else if st.mode == .normal {
+                                Text("Normal power mode. For extra headroom, enable High Power Mode in System Settings → Battery (on supported Macs).")
+                                    .font(.callout)
+                                    .foregroundStyle(Theme.mute)
+                            }
+                            if st.thermalLevel >= 2 {
+                                Text("System is thermally constrained — consider closing background apps or cooling the Mac.")
+                                    .font(.callout)
+                                    .foregroundStyle(Theme.warn)
+                            }
+                        } else {
+                            Text("Check power mode and thermal pressure before a session.")
+                                .font(.callout)
+                                .foregroundStyle(Theme.mute)
+                        }
+                        HStack {
+                            PillButton(title: "Open Energy settings") { SystemPower.openEnergySettings() }
+                            if power.status?.mode == .lowPower {
+                                PillButton(title: "Start gaming", primary: true) {
+                                    EasyRun.startGaming(mapper: mapper, launchers: nil, openSteam: false)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -281,7 +343,10 @@ struct SettingsPage: View {
             .padding(28)
         }
         .background(Theme.heroGradient.opacity(0.2))
-        .onAppear { settings.refreshLoginItemState() }
+        .onAppear {
+            settings.refreshLoginItemState()
+            power.refresh()
+        }
     }
 
     private func labeledSlider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {

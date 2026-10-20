@@ -299,7 +299,7 @@ struct EasyFirstRunSheet: View {
                         Text("2 · Pair your controller").font(.headline)
                         Text(monitor.selected.connected
                              ? "Connected: \(monitor.selected.kind.shortLabel) — you’re good."
-                             : "Prefer USB Micro-USB + hold PS if Bluetooth won’t list DualShock 4. Then Rediscover.")
+                             : "Prefer USB Micro-USB + hold PS if Bluetooth won’t list the pad. Then Rediscover.")
                             .font(.callout).foregroundStyle(Theme.mute)
                             .fixedSize(horizontal: false, vertical: true)
                         HeroPadArt(connected: monitor.selected.connected, maxHeight: 120)

@@ -11,7 +11,8 @@ if [[ ! -f LICENSE && ! -f LICENSE.md && ! -f COPYING ]]; then
 fi
 
 echo "== shell syntax =="
-mapfile -t sh_files < <(find . -type f -name '*.sh' ! -path './.git/*' | sort)
+sh_files=()
+while IFS= read -r f; do sh_files+=("$f"); done < <(find . -type f -name '*.sh' ! -path './.git/*' ! -path './archive/*' | sort)
 if ((${#sh_files[@]})); then
   for f in "${sh_files[@]}"; do
     echo "bash -n $f"
@@ -22,7 +23,8 @@ else
 fi
 
 echo "== python compile =="
-mapfile -t py_files < <(find . -type f -name '*.py' ! -path './.git/*' ! -path '*/.venv/*' ! -path '*/venv/*' | sort)
+py_files=()
+while IFS= read -r f; do py_files+=("$f"); done < <(find . -type f -name '*.py' ! -path './.git/*' ! -path '*/.venv/*' ! -path '*/venv/*' | sort)
 if ((${#py_files[@]})); then
   python3 -m py_compile "${py_files[@]}"
   echo "compiled ${#py_files[@]} python files"

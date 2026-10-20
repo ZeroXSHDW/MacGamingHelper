@@ -9,6 +9,11 @@ enum MacGamingHelperMain {
             fflush(stdout)
             exit(code)
         }
+        if CommandLine.arguments.contains("--controller-test") {
+            let code = MainActor.assumeIsolated { ControllerSelfTest.run() }
+            fflush(stdout)
+            exit(code)
+        }
         MacGamingHelperApp.main()
     }
 }
@@ -46,7 +51,8 @@ struct MacGamingHelperApp: App {
                     MenuBarController.shared.bind(monitor: monitor, settings: settings, mapper: mapper, launchers: launchers)
                     MenuBarController.shared.applyVisibility()
                     GamingOverlayController.shared.bind(monitor: monitor, mapper: mapper, settings: settings)
-                    NSApp.setActivationPolicy(.regular) // keep Dock icon while running
+                    GlobalHotkeys.shared.install()
+                    NSApp.setActivationPolicy(settings.keepInDock || !settings.showMenuBar ? .regular : .accessory)
                     if settings.loginStartGaming {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                             EasyRun.startGaming(mapper: mapper, launchers: launchers, openSteam: false, goPlayPage: true)
@@ -87,23 +93,19 @@ struct MacGamingHelperApp: App {
                     NotificationCenter.default.post(name: .mghRediscover, object: nil)
                 }
                 .keyboardShortcut("r", modifiers: .command)
-                Button("Pause / Resume Mapping") {
+                Button("Pause / Resume Mapping (⌥⌘M)") {
                     NotificationCenter.default.post(name: .mghToggleMappingPause, object: nil)
                 }
-                .keyboardShortcut("m", modifiers: [.command, .option])
                 Divider()
-                Button("Mapping Profile 1") {
+                Button("Mapping Profile 1 (⌘⌥1)") {
                     NotificationCenter.default.post(name: .mghProfileSlot, object: 0)
                 }
-                .keyboardShortcut("1", modifiers: [.command, .option])
-                Button("Mapping Profile 2") {
+                Button("Mapping Profile 2 (⌘⌥2)") {
                     NotificationCenter.default.post(name: .mghProfileSlot, object: 1)
                 }
-                .keyboardShortcut("2", modifiers: [.command, .option])
-                Button("Mapping Profile 3") {
+                Button("Mapping Profile 3 (⌘⌥3)") {
                     NotificationCenter.default.post(name: .mghProfileSlot, object: 2)
                 }
-                .keyboardShortcut("3", modifiers: [.command, .option])
                 Divider()
                 Button("Prep Steam Session") {
                     NotificationCenter.default.post(name: .mghPrepSteam, object: nil)
@@ -115,10 +117,9 @@ struct MacGamingHelperApp: App {
                 Button("Stop Gaming Session") {
                     NotificationCenter.default.post(name: .mghStopGaming, object: nil)
                 }
-                Button("Toggle Gaming Overlay") {
+                Button("Toggle Gaming Overlay (⌃⌥⌘P)") {
                     NotificationCenter.default.post(name: .mghToggleHUD, object: nil)
                 }
-                .keyboardShortcut("p", modifiers: [.control, .option, .command])
                 Button("Overlay: Compact / Performance") {
                     NotificationCenter.default.post(name: .mghToggleOverlayMode, object: nil)
                 }

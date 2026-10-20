@@ -6,12 +6,29 @@ struct ControllerPage: View {
     @EnvironmentObject private var settings: AppSettings
     @State private var showDetails = false
     @State private var calibrationNote = ""
+    @State private var showPadCheck = false
+    @StateObject private var bluetooth = BluetoothReadinessModel()
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 statusChips
+                if monitor.selected.connected,
+                   let pct = monitor.selected.batteryPercent, pct <= 15 {
+                    HStack(spacing: 8) {
+                        Image(systemName: monitor.selected.batteryCharging ? "bolt.fill" : "battery.25")
+                        Text(monitor.selected.batteryCharging
+                             ? "Battery \(pct)% — keep the USB cable connected while you play."
+                             : "Battery \(pct)% — connect USB now.")
+                            .font(.callout.weight(.semibold))
+                    }
+                    .foregroundStyle(Theme.warn)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Theme.warn.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                }
+                wirelessCard
                 HeroPadArt(connected: monitor.selected.connected, maxHeight: settings.focusModeController ? 160 : 200)
                     .frame(maxWidth: .infinity)
                     .scaleEffect(monitor.connectPulse ? 1.02 : 1.0)
@@ -25,7 +42,7 @@ struct ControllerPage: View {
                 if monitor.selected.connected {
                     DualShockDiagram(snap: monitor.selected)
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                        .accessibilityLabel("Live DualShock layout diagram")
+                        .accessibilityLabel("Live PlayStation layout diagram")
                     deadzoneCard
                     DisclosureGroup(isExpanded: $showDetails) {
                         readouts
@@ -33,7 +50,7 @@ struct ControllerPage: View {
                         motionCard
                         calibrationCard
                     } label: {
-                        Text("Details — axes, light bar, haptics, motion")
+                        Text("Details — axes, light bar, haptics, adaptive triggers, motion")
                             .font(.headline)
                     }
                     .padding(.vertical, 4)
@@ -46,6 +63,89 @@ struct ControllerPage: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: monitor.selected.connected)
         }
         .background(Theme.heroGradient.opacity(0.35))
+        .sheet(isPresented: $showPadCheck) {
+            ControllerCheckSheet(monitor: monitor)
+        }
+        .onAppear {
+            bluetooth.refresh()
+        }
+        .onChange(of: monitor.selected.transport) { _, _ in
+            bluetooth.refresh()
+        }
+    }
+
+    private var wirelessCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Wireless readiness")
+                            .font(.headline)
+                        Text("Check macOS Bluetooth pairing before you unplug USB.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                    }
+                    Spacer()
+                    PillButton(title: bluetooth.checking ? "Checking…" : "Check") {
+                        bluetooth.refresh()
+                    }
+                }
+
+                if let st = bluetooth.status {
+                    HStack(spacing: 8) {
+                        StatusChip(
+                            text: st.powerOn ? "Bluetooth On" : "Bluetooth Off",
+                            color: st.powerOn ? Theme.good : Theme.warn
+                        )
+                        StatusChip(
+                            text: st.hasPlayStationPair ? "Paired" : "Not paired",
+                            color: st.hasPlayStationPair ? Theme.good : Theme.mute
+                        )
+                        if st.hasPlayStationConnection, monitor.selected.transport != .usb {
+                            StatusChip(text: "Wireless connected", color: Theme.good)
+                        }
+                    }
+                    Text(wirelessMessage(st))
+                        .font(.callout)
+                        .foregroundStyle(Theme.mute)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("Check whether macOS has a paired DualSense / DualShock 4 for wireless play.")
+                        .font(.callout)
+                        .foregroundStyle(Theme.mute)
+                }
+
+                HStack(spacing: 10) {
+                    PillButton(title: "Bluetooth Settings") {
+                        launchers.openBluetooth()
+                    }
+                    if let st = bluetooth.status,
+                       monitor.selected.connected,
+                       monitor.selected.transport == .usb,
+                       st.hasPlayStationPair {
+                        Text("Unplug USB to test wireless.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                    }
+                }
+            }
+        }
+    }
+
+    private func wirelessMessage(_ st: BluetoothPadStatus) -> String {
+        if !st.powerOn {
+            return "Bluetooth is off. Turn it on in System Settings, then press Check."
+        }
+        if !st.hasPlayStationPair {
+            return "No paired PlayStation controller yet. Hold Create + PS (DualSense) or Share + PS (DualShock 4) until the light bar flashes, then open Bluetooth Settings."
+        }
+        if monitor.selected.connected, monitor.selected.transport == .usb {
+            return "\(st.playStationPairedName ?? "Your pad") is paired. Unplug USB to switch to Bluetooth — macOS should reconnect it automatically."
+        }
+        if let name = st.playStationConnectedName {
+            return "\(name) is connected wirelessly."
+        }
+        return "\(st.playStationPairedName ?? "Your pad") is paired but not connected. Press PS once, then press Check."
     }
 
     private var statusChips: some View {
@@ -60,6 +160,9 @@ struct ControllerPage: View {
                 if s.motionAvailable {
                     StatusChip(text: "Motion", color: Theme.good)
                 }
+                if s.adaptiveTriggersSupported {
+                    StatusChip(text: "Adaptive triggers", color: Theme.good)
+                }
             } else {
                 StatusChip(text: "Waiting", color: Theme.warn)
             }
@@ -72,7 +175,7 @@ struct ControllerPage: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("DualShock 4 Desk")
+                    Text("PlayStation Controller Desk")
                         .font(.largeTitle.weight(.bold))
                         .tracking(-0.4)
                     Text(monitor.statusLine)
@@ -88,7 +191,14 @@ struct ControllerPage: View {
                 PillButton(title: monitor.discovering ? "Scanning…" : "Rediscover", primary: true) {
                     monitor.rediscover()
                 }
+                PillButton(title: "Pad check") { showPadCheck = true }
                 PillButton(title: "Bluetooth Settings") { launchers.openBluetooth() }
+                if monitor.selected.connected {
+                    PillButton(title: "Identify pad") { monitor.identifyController() }
+                }
+                if monitor.selected.adaptiveTriggersSupported {
+                    PillButton(title: "Adaptive demo") { monitor.pulseAdaptiveTriggers() }
+                }
                 if launchers.items.first(where: { $0.id == "steam" })?.isInstalled == true {
                     PillButton(title: "Steam Big Picture") { launchers.openSteamBigPicture() }
                 }
@@ -140,19 +250,26 @@ struct ControllerPage: View {
         }
     }
 
-    private var readouts: some View {
-        let s = monitor.selected
+    private var readouts: some View {        let s = monitor.selected
         return Card {
             VStack(alignment: .leading, spacing: 12) {
-                Text(s.connected ? s.title : "Waiting for a DualShock 4")
+                Text(s.connected ? s.title : "Waiting for a PlayStation controller")
                     .font(.title3.weight(.semibold))
                 if s.connected {
                     Text([s.kind.rawValue, s.category, s.battery].filter { !$0.isEmpty }.joined(separator: " · "))
                         .foregroundStyle(Theme.mute)
+                    if s.transport == .bluetooth && s.batteryPercent == nil {
+                        Text("Wireless connection — macOS does not expose an exact battery percentage over Bluetooth.")
+                            .font(.caption)
+                            .foregroundStyle(Theme.mute)
+                    }
                     Text(s.buttons.isEmpty ? "Press a button or move a stick." : s.buttons.joined(separator: "   "))
                         .font(.title3.monospaced())
                         .foregroundStyle(Theme.ds4Blue)
                         .frame(minHeight: 28, alignment: .leading)
+                    Text("If presses do not appear, quit Steam (Steam Input can hold the pad) or try USB.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.mute)
                     AxisLine(name: "Left stick X", value: s.lx, bipolar: true)
                     AxisLine(name: "Left stick Y", value: s.ly, bipolar: true)
                     AxisLine(name: "Right stick X", value: s.rx, bipolar: true)
@@ -161,7 +278,7 @@ struct ControllerPage: View {
                     AxisLine(name: "R2 trigger", value: s.rt, bipolar: false)
                 } else {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("No DualShock 4 yet — try this:")
+                        Text("No PlayStation controller yet — try this:")
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(Color.primary)
                         HStack(spacing: 12) {
@@ -170,9 +287,9 @@ struct ControllerPage: View {
                             CoachStepArt(imageName: "coach-bluetooth", title: "Bluetooth")
                             CoachStepArt(imageName: "coach-reset", title: "Reset")
                         }
-                        Text("1. Lights flash but pad never appears? Plug Micro-USB (data cable) first, press PS, then Rediscover.")
-                        Text("2. Or hold Share + PS until the light flashes quickly → Bluetooth → Wireless Controller.")
-                        Text("3. Still invisible? Reset pinhole (paperclip, ~5s), forget stale Bluetooth entries, retry USB.")
+                        Text("1. Light bar flashing but the pad never appears? Plug in USB-C (DualSense) or Micro-USB (DualShock 4) first — use a data cable, then press PS and Rediscover.")
+                        Text("2. Wireless: hold Create + PS (DualSense) or Share + PS (DualShock 4) until the light bar flashes quickly → Bluetooth → DualSense / Wireless Controller.")
+                        Text("3. Still invisible? Reset pinhole (paperclip, ~5s), remove stale Bluetooth entries, and retry USB. Quit Steam while pairing if it is running.")
                         Text("Full coach: sidebar → Pairing / Setup.")
                             .foregroundStyle(Theme.mute)
                         HStack(spacing: 10) {
@@ -207,17 +324,45 @@ struct ControllerPage: View {
                 } else {
                     Text(monitor.selected.connected
                          ? "This pad does not expose a controllable light bar through Game Controller."
-                         : "Connect a DualShock 4 / DualSense to try light bar tint and rumble.")
+                         : "Connect a DualSense / DualShock 4 to try light bar tint and rumble.")
                         .foregroundStyle(Theme.mute)
                 }
                 Text("Haptic tests")
                     .font(.subheadline.weight(.semibold))
+                if monitor.selected.hapticsSupported {
+                    HStack {
+                        Text("Intensity")
+                        Slider(value: $settings.hapticIntensity, in: 0.3...1.0)
+                        Text("\(Int((settings.hapticIntensity * 100).rounded()))%")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(Theme.mute)
+                            .frame(width: 40)
+                    }
+                    Text("Also scales DualSense adaptive-trigger resistance.")
+                        .font(.caption2)
+                        .foregroundStyle(Theme.mute)
+                }
                 HStack(spacing: 8) {
                     ForEach(HapticPatternKind.allCases) { kind in
                         PillButton(title: kind.title, primary: kind == .medium) {
                             monitor.pulseHaptics(kind)
                         }
                     }
+                }
+                if monitor.selected.adaptiveTriggersSupported {
+                    Text("Adaptive triggers (DualSense)")
+                        .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 8) {
+                        ForEach(AdaptiveTriggerDemo.allCases) { demo in
+                            PillButton(title: demo.rawValue, primary: demo == .weaponFeedback) {
+                                monitor.pulseAdaptiveTriggerDemo(demo)
+                            }
+                        }
+                        PillButton(title: "Reset") { monitor.resetAdaptiveTriggers() }
+                    }
+                    Text("Weapon + feedback = L2 break, R2 resistance · Slope = ramping force · Vibration = trigger buzz. Each resets after 2.5 s.")
+                        .font(.caption)
+                        .foregroundStyle(Theme.mute)
                 }
                 if !monitor.lastHapticNote.isEmpty {
                     Text(monitor.lastHapticNote)
@@ -312,15 +457,16 @@ struct ControllerPage: View {
     private var tips: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Pairing a DualShock 4")
+                Text("Pairing a PlayStation controller")
                     .font(.headline)
-                Text("1. Prefer USB first if Bluetooth discovery fails — plug Micro-USB, press PS, Rediscover.")
-                Text("2. Wireless: hold Share + PlayStation until the light bar flashes quickly.")
-                Text("3. System Settings → Bluetooth → Wireless Controller → Connect.")
-                Text("4. Press Rediscover here. Live buttons/sticks mean Game Controller sees the pad.")
-                Text("5. Steam: Big Picture + Steam Input. Mapping is for apps that ignore gamepads.")
+                Text("1. Prefer USB first if Bluetooth discovery fails — USB-C for DualSense, Micro-USB for DualShock 4. Use a data cable, press PS, then Rediscover.")
+                Text("2. Wireless DualSense: hold Create + PS until the light bar flashes quickly.")
+                Text("3. Wireless DualShock 4: hold Share + PS until the light bar flashes quickly.")
+                Text("4. System Settings → Bluetooth → DualSense / Wireless Controller → Connect.")
+                Text("5. Press Rediscover here. Live buttons/sticks mean Game Controller sees the pad.")
+                Text("6. Steam: Big Picture + Steam Input. Mapping is for apps that ignore gamepads.")
                     .foregroundStyle(Theme.mute)
-                Text("Stuck? Open Pairing / Setup for reset pinhole, USB rescue, and permissions.")
+                Text("Quit Steam while pairing if the pad is not appearing; Steam can hold the controller. Stuck? Open Pairing / Setup for the reset pinhole and USB rescue.")
                     .font(.caption)
                     .foregroundStyle(Theme.warn)
             }
@@ -360,14 +506,14 @@ struct AxisLine: View {
     }
 }
 
-/// Schematic DualShock-style layout that lights up with the live pad state.
+/// Schematic PlayStation-style layout that lights up with the live pad state.
 struct DualShockDiagram: View {
     let snap: ControllerSnapshot
 
     var body: some View {
         Card {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Live DualShock layout")
+                Text("Live PlayStation layout")
                     .font(.headline)
                 ZStack {
                     RoundedRectangle(cornerRadius: 36, style: .continuous)
@@ -424,7 +570,8 @@ struct DualShockDiagram: View {
 
                     // Share / Options / PS
                     HStack(spacing: 28) {
-                        smallBtn("Share", active: lit("Share") || lit("View"))
+                        smallBtn(snap.kind == .dualSense ? "Create" : "Share",
+                                 active: lit("Share") || lit("View"))
                         Circle()
                             .fill(lit("PS") || lit("Home") ? Theme.ds4Blue : Color.white.opacity(0.2))
                             .frame(width: 22, height: 22)
@@ -442,6 +589,7 @@ struct DualShockDiagram: View {
     private func lit(_ name: String) -> Bool {
         if name == "Touchpad" { return snap.touchpadPressed || snap.buttons.contains("Touchpad") }
         if name == "PS" { return snap.homePressed || snap.buttons.contains("PS") }
+        if name == "Share" { return snap.buttons.contains("Share") || snap.buttons.contains("Create") }
         return snap.buttons.contains(name)
     }
 
@@ -459,8 +607,18 @@ struct DualShockDiagram: View {
         Circle()
             .fill(lit(name) ? Theme.ds4Blue : Color.white.opacity(0.18))
             .frame(width: 28, height: 28)
-            .overlay(Text(String(name.prefix(1))).font(.caption2.bold()).foregroundStyle(.white))
+            .overlay(Text(faceSymbol(name)).font(.caption2.bold()).foregroundStyle(.white))
             .offset(x: dx, y: dy)
+    }
+
+    private func faceSymbol(_ name: String) -> String {
+        switch name {
+        case "Cross": return "✕"
+        case "Circle": return "○"
+        case "Square": return "□"
+        case "Triangle": return "△"
+        default: return String(name.prefix(1))
+        }
     }
 
     private var dpadCluster: some View {

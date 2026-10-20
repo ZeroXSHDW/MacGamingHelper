@@ -16,11 +16,12 @@ enum Diagnostics {
         } else {
             pads = monitor.snapshots.map { s in
                 """
-                  - \(s.kind.rawValue) | \(s.transportLabel) | \(s.vendor) | \(s.category) | player \(s.playerIndex) | \(s.battery) | motion=\(s.motionAvailable) | key=\(s.preferenceKey)
+                  - \(s.kind.rawValue) | \(s.transportLabel) | \(s.vendor) | \(s.category) | player \(s.playerIndex) | \(s.battery) | light=\(s.lightBarSupported) | haptics=\(s.hapticsSupported) | adaptive=\(s.adaptiveTriggersSupported) | touchpad=\(s.kind.isPlayStation ? (s.touchpadPressed ? "pressed" : "available") : "n/a") | motion=\(s.motionAvailable) | key=\(s.preferenceKey)
                 """
             }.joined()
         }
         let rediscover = monitor.lastRediscoverDescription
+        let bt = BluetoothSupport.snapshot()
         return """
         Mac Gaming Helper diagnostics
         =============================
@@ -32,7 +33,7 @@ enum Diagnostics {
         Permissions
         -----------
         Accessibility (AXIsProcessTrusted): \(ax ? "granted" : "not granted")
-        Bluetooth: pair DualShock 4 in System Settings (usage string present in Info.plist)
+        Bluetooth: pair DualSense / DualShock 4 in System Settings (usage string present in Info.plist)
         Mapping enabled: \(mapper.enabled) · LIVE posting: \(mapper.isLive) · paused: \(mapper.pausedByUser)
         Active profile: \(mapper.profile.name) (\(mapper.profile.id))
 
@@ -43,6 +44,12 @@ enum Diagnostics {
         Selected: \(monitor.selected.connected ? monitor.selected.title : "none")
         Pads:
         \(pads)
+
+        Bluetooth
+        ---------
+        Power: \(bt.powerOn ? "on" : "off")
+        Paired: \(bt.pairedNames.isEmpty ? "(none)" : bt.pairedNames.joined(separator: ", "))
+        Connected: \(bt.connectedNames.isEmpty ? "(none)" : bt.connectedNames.joined(separator: ", "))
 
         Settings snapshot
         -----------------

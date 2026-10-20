@@ -31,6 +31,9 @@ enum EasyRun {
         // Order: session first (may auto-show overlay), then force overlay on
         settings.gamingSessionActive = true
         settings.showOverlay = true
+        if settings.sessionStartedAt == nil {
+            settings.sessionStartedAt = Date()
+        }
 
         if pauseMappingForSteam || openSteam {
             mapper?.pauseForSteamSession()
@@ -67,6 +70,7 @@ enum EasyRun {
         let settings = AppSettings.shared
         settings.gamingSessionActive = false
         settings.showOverlay = false
+        settings.sessionStartedAt = nil
         // Force keep-awake clear even if didSets raced
         KeepAwake.shared.update(active: false)
         GamingOverlayController.shared.hideForStop()

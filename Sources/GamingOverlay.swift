@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-enum OverlayMode: String, CaseIterable, Identifiable {
+enum OverlayMode: String, CaseIterable, Identifiable, Codable {
     case compact
     case performance
     var id: String { rawValue }
@@ -29,7 +29,24 @@ final class GamingOverlayController: ObservableObject {
     private weak var monitor: ControllerMonitor?
     private weak var mapper: InputMapper?
     private weak var settings: AppSettings?
-    private var refreshTimer: Timer?
+    private var activityToken: NSObjectProtocol?
+
+    /// Keep the HUD timers at full rate while it is on screen. App Nap can
+    /// otherwise throttle the 1 s refresh and make FPS / ping / pad status lag.
+    private func beginOverlayActivity() {
+        guard activityToken == nil else { return }
+        activityToken = ProcessInfo.processInfo.beginActivity(
+            options: .userInitiatedAllowingIdleSystemSleep,
+            reason: "Gaming overlay visible"
+        )
+    }
+
+    private func endOverlayActivity() {
+        if let token = activityToken {
+            ProcessInfo.processInfo.endActivity(token)
+            activityToken = nil
+        }
+    }
 
     func bind(monitor: ControllerMonitor, mapper: InputMapper, settings: AppSettings) {
         self.monitor = monitor
@@ -45,12 +62,9 @@ final class GamingOverlayController: ObservableObject {
             show()
             PerfSampler.shared.start(pingHost: settings.pingHost, pingEnabled: settings.pingEnabled && settings.metricPing)
             PerfSampler.shared.updatePingConfig(host: settings.pingHost, enabled: settings.pingEnabled && settings.metricPing)
-            startRefresh()
         } else {
             hide()
             PerfSampler.shared.stop()
-            refreshTimer?.invalidate()
-            refreshTimer = nil
         }
         settings.syncKeepAwake()
         evaluateAutoHide()
@@ -70,8 +84,7 @@ final class GamingOverlayController: ObservableObject {
 
     /// Stop gaming: hide panel, stop samplers, tear down to avoid zombie windows.
     func hideForStop() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
+        endOverlayActivity()
         PerfSampler.shared.stop()
         panel?.orderOut(nil)
         panel?.close()
@@ -79,17 +92,12 @@ final class GamingOverlayController: ObservableObject {
         host = nil
     }
 
+    /// Called once per second by the menu-bar timer. The overlay's SwiftUI
+    /// views observe the live objects directly, so there is no need to rebuild
+    /// the root view here.
     func refresh() {
         guard let settings, settings.effectiveOverlayVisible else { return }
-        rebuildRoot()
         evaluateAutoHide()
-    }
-
-    private func startRefresh() {
-        refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.rebuildRoot() }
-        }
     }
 
     private func evaluateAutoHide() {
@@ -100,9 +108,11 @@ final class GamingOverlayController: ObservableObject {
         if !monitor.selected.connected && !settings.gamingSessionActive {
             // Keep showOverlay true but hide panel visually? Spec says auto-hide option.
             // Hide panel without clearing preference so reconnect / session re-shows.
+            endOverlayActivity()
             panel?.orderOut(nil)
             PerfSampler.shared.stop()
         } else if settings.effectiveOverlayVisible {
+            beginOverlayActivity()
             panel?.orderFrontRegardless()
             PerfSampler.shared.start(pingHost: settings.pingHost, pingEnabled: settings.pingEnabled && settings.metricPing)
         }
@@ -148,12 +158,12 @@ final class GamingOverlayController: ObservableObject {
         }
         rebuildRoot()
         layoutPanel()
+        beginOverlayActivity()
         panel?.orderFrontRegardless()
     }
 
     private func hide() {
-        refreshTimer?.invalidate()
-        refreshTimer = nil
+        endOverlayActivity()
         panel?.orderOut(nil)
     }
 
@@ -174,7 +184,7 @@ final class GamingOverlayController: ObservableObject {
         let frame = screen.visibleFrame
         if settings.overlayMode == .performance {
             let width = frame.width * 0.92
-            let height: CGFloat = 44
+            let height: CGFloat = 62
             let x = frame.midX - width / 2
             let y: CGFloat = settings.overlayEdge == .top
                 ? frame.maxY - height - 6
@@ -342,7 +352,8 @@ struct PerformanceBarView: View {
     @ObservedObject var perf: PerfSampler
 
     var body: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 4) {
+            HStack(spacing: 8) {
             if settings.metricController {
                 MetricCapsule(
                     icon: "gamecontroller.fill",
@@ -368,6 +379,15 @@ struct PerformanceBarView: View {
                     value: perf.snap.cpuPercent.map { String(format: "%.0f%%", $0) } ?? "—",
                     color: OverlayStyle.load(perf.snap.cpuPercent),
                     help: "Overall CPU via host_processor_info"
+                ) { MenuBarController.shared.openMainWindow() }
+            }
+            if settings.metricCores {
+                MetricCapsule(
+                    icon: "cpu",
+                    title: "Core",
+                    value: perf.hottestCore.map { String(format: "%.0f%%", $0) } ?? "—",
+                    color: OverlayStyle.load(perf.hottestCore),
+                    help: "Hottest CPU core · all cores: \(coreSummary)"
                 ) { MenuBarController.shared.openMainWindow() }
             }
             if settings.metricMemory {
@@ -424,6 +444,24 @@ struct PerformanceBarView: View {
                     help: "⌥⌘M pause/resume · \(mapper.profile.name)"
                 ) { MenuBarController.shared.openMainWindow() }
             }
+            if settings.metricThermal {
+                MetricCapsule(
+                    icon: "thermometer.medium",
+                    title: "Thermal",
+                    value: perf.snap.thermalLabel,
+                    color: OverlayStyle.thermal(perf.snap.thermalLevel),
+                    help: "System thermal pressure — nominal / fair / serious / critical"
+                ) { MenuBarController.shared.openMainWindow() }
+            }
+            if settings.metricTime, let start = settings.sessionStartedAt {
+                MetricCapsule(
+                    icon: "timer",
+                    title: "Time",
+                    value: sessionElapsed(start),
+                    color: Theme.accent,
+                    help: "Time in this gaming session"
+                ) { MenuBarController.shared.openMainWindow() }
+            }
             if settings.metricAwake && KeepAwake.shared.isAsserting {
                 MetricCapsule(
                     icon: "cup.and.saucer.fill",
@@ -443,9 +481,11 @@ struct PerformanceBarView: View {
             }
             .buttonStyle(.plain)
             .help("Compact HUD")
+            }
+            sparklineRow
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -502,6 +542,66 @@ struct PerformanceBarView: View {
         if mapper.pausedByUser { return Theme.warn }
         return Theme.accent
     }
+
+    private var sparklineRow: some View {
+        HStack(spacing: 16) {
+            sparkline("CPU", perf.cpuHistory, Theme.accent)
+            sparkline("GPU", perf.gpuHistory, Theme.warn)
+        }
+        .frame(height: 14)
+    }
+
+    @ViewBuilder
+    private func sparkline(_ label: String, _ values: [Double], _ color: Color) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(Theme.mute)
+            SparklineView(values: values, color: color)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func sessionElapsed(_ start: Date) -> String {
+        let t = max(0, Int(Date().timeIntervalSince(start)))
+        let h = t / 3600
+        let m = (t % 3600) / 60
+        let s = t % 60
+        if h > 0 { return String(format: "%d:%02d:%02d", h, m, s) }
+        return String(format: "%d:%02d", m, s)
+    }
+
+    private var coreSummary: String {
+        guard !perf.coreLoads.isEmpty else { return "—" }
+        return perf.coreLoads.map { String(format: "%.0f", $0) }.joined(separator: " ")
+    }
+}
+
+struct SparklineView: View {
+    let values: [Double]
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geo in
+            let h = geo.size.height
+            let w = geo.size.width
+            let maxV = max(values.max() ?? 1, 1)
+            if values.count > 1 {
+                Path { p in
+                    for (i, v) in values.enumerated() {
+                        let x = w * CGFloat(i) / CGFloat(values.count - 1)
+                        let y = h * (1 - CGFloat(min(v, 100) / maxV))
+                        if i == 0 {
+                            p.move(to: CGPoint(x: x, y: y))
+                        } else {
+                            p.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            }
+        }
+    }
 }
 
 struct MetricCapsule: View {
@@ -552,5 +652,12 @@ enum OverlayStyle {
         if ms < 50 { return Theme.good }
         if ms < 100 { return Theme.warn }
         return Theme.bad
+    }
+    static func thermal(_ level: Int) -> Color {
+        switch level {
+        case 0: return Theme.good
+        case 1: return Theme.warn
+        default: return Theme.bad
+        }
     }
 }
